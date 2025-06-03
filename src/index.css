@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background-dark text-text-primary font-sans;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-md font-medium transition-all duration-200 
+           focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-offset-background-dark;
+  }
+  
+  .btn-primary {
+    @apply btn bg-accent-pink hover:bg-opacity-90 text-text-primary focus:ring-accent-pink;
+  }
+  
+  .btn-secondary {
+    @apply btn bg-background-light hover:bg-opacity-90 text-text-primary focus:ring-background-light;
+  }
+  
+  .btn-outline {
+    @apply btn bg-transparent border border-border hover:border-accent-pink 
+           hover:text-accent-pink focus:ring-accent-pink;
+  }
+  
+  .card {
+    @apply bg-background-card rounded-lg overflow-hidden shadow-md transition-transform duration-200;
+  }
+  
+  .input {
+    @apply w-full bg-background-light text-text-primary border border-border rounded-md
+           px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-pink focus:border-transparent;
+  }
+
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-3 rounded-md transition-colors duration-200
+           hover:bg-background-light hover:text-accent-pink;
+  }
+  
+  .sidebar-link.active {
+    @apply bg-background-light text-accent-pink;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: #242424;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #3A3A3A;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #505050;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
