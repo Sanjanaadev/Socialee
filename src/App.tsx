@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { Toaster } from 'react-hot-toast';
 
 // Layouts
 import MainLayout from './layouts/MainLayout';
@@ -14,6 +14,7 @@ import Moods from './pages/Moods';
 import Messages from './pages/Messages';
 import Conversation from './pages/Conversation';
 import Profile from './pages/Profile';
+import EditProfile from './pages/EditProfile';
 import NotFound from './pages/NotFound';
 
 // Context
@@ -39,9 +40,11 @@ function App() {
             <Route path="messages/:conversationId" element={<Conversation />} />
             <Route path="profile/:userId" element={<Profile />} />
             <Route path="profile" element={<Profile />} />
+            <Route path="edit-profile" element={<EditProfile />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
+        <Toaster position="top-center" />
       </Router>
     </AuthProvider>
   );
