@@ -31,10 +31,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   });
 
   const login = async (email: string, password: string) => {
-    // In a real app, this would call your API
     return new Promise<void>((resolve, reject) => {
       setTimeout(() => {
-        if (email && password) {
+        if (email === 'admin' && password === 'admin') {
           localStorage.setItem('socialee_token', 'mock-jwt-token');
           setUser(currentUser);
           resolve();
@@ -46,11 +45,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const signup = async (name: string, username: string, email: string, password: string, profilePic?: File) => {
-    // In a real app, this would call your API
     return new Promise<void>((resolve, reject) => {
       setTimeout(() => {
         if (name && username && email && password) {
-          // In a real app, you would create a user and return it
           resolve();
         } else {
           reject(new Error('All fields are required'));

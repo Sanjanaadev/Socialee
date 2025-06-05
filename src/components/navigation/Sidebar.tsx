@@ -86,17 +86,14 @@ const Sidebar = ({ onCloseSidebar }: SidebarProps) => {
 
       {/* Create Button */}
       <div className="px-4 my-4">
-        <button 
+        <Link 
+          to="/create"
           className="btn-primary w-full flex items-center justify-center gap-2"
-          onClick={() => {
-            // This would open a modal in a real app
-            alert('Create post functionality would open here');
-            if (onCloseSidebar) onCloseSidebar();
-          }}
+          onClick={onCloseSidebar}
         >
           <Plus size={20} />
           <span>Create</span>
-        </button>
+        </Link>
       </div>
 
       {/* User Section */}

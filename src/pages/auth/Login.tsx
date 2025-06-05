@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { motion } from 'framer-motion';
 
 const Login = () => {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -18,26 +18,10 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      await login(email, password);
+      await login(username, password);
       navigate('/home');
     } catch (err) {
-      setError('Invalid email or password');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // For demo purposes - quick login
-  const handleDemoLogin = async () => {
-    setEmail('alex@example.com');
-    setPassword('password');
-    setIsLoading(true);
-
-    try {
-      await login('alex@example.com', 'password');
-      navigate('/home');
-    } catch (err) {
-      setError('Something went wrong with demo login');
+      setError('Invalid username or password');
     } finally {
       setIsLoading(false);
     }
@@ -51,7 +35,7 @@ const Login = () => {
     >
       <div className="text-center mb-8">
         <h2 className="text-2xl font-bold text-text-primary">Welcome Back</h2>
-        <p className="text-text-secondary mt-2">Sign in to continue to Socialee</p>
+        <p className="text-text-secondary mt-2">Discover a place to connect, share, and grow your story with the world.</p>
       </div>
 
       {error && (
@@ -62,16 +46,16 @@ const Login = () => {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-text-secondary mb-1">
-            Email
+          <label htmlFor="username" className="block text-sm font-medium text-text-secondary mb-1">
+            Username
           </label>
           <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            id="username"
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             className="input"
-            placeholder="your@email.com"
+            placeholder="Enter your username"
             required
           />
         </div>
@@ -106,16 +90,6 @@ const Login = () => {
           </button>
         </div>
       </form>
-
-      <div className="mt-6">
-        <button
-          onClick={handleDemoLogin}
-          className="btn-outline w-full"
-          disabled={isLoading}
-        >
-          Demo Login
-        </button>
-      </div>
 
       <div className="text-center mt-6">
         <p className="text-text-secondary">

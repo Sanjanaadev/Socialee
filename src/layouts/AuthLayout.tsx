@@ -18,12 +18,12 @@ const AuthLayout = () => {
           </div>
           <h1 className="text-4xl font-bold mb-4 text-text-primary">Socialee</h1>
           <p className="text-text-secondary mb-8">
-            Connect with friends and the world around you with Socialee's sleek and stylish platform.
+            Discover a place to connect, share, and grow your story with the world.
           </p>
           <div className="grid grid-cols-3 gap-4 mb-8">
             <div className="bg-background-card p-4 rounded-lg">
               <h3 className="font-medium text-accent-pink">Share</h3>
-              <p className="text-text-secondary text-sm mt-2">Photos and moments</p>
+              <p className="text-text-secondary text-sm mt-2">Moments</p>
             </div>
             <div className="bg-background-card p-4 rounded-lg">
               <h3 className="font-medium text-accent-purple">Connect</h3>

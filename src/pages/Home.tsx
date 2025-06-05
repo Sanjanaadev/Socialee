@@ -1,24 +1,61 @@
 import { useState, useEffect } from 'react';
 import { posts } from '../data/mockData';
 import { Link } from 'react-router-dom';
-import { Heart, MessageCircle } from 'lucide-react';
-import { Post } from '../types';
+import { Heart, MessageCircle, Send } from 'lucide-react';
+import { Post, Comment } from '../types';
 import Masonry from 'react-masonry-css';
 import { motion } from 'framer-motion';
+import { useAuth } from '../context/AuthContext';
 
 const Home = () => {
   const [feedPosts, setFeedPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [newComments, setNewComments] = useState<{ [key: string]: string }>({});
+  const { user } = useAuth();
 
   useEffect(() => {
-    // Simulate API fetch with a delay
     const timer = setTimeout(() => {
-      setFeedPosts(posts);
+      setFeedPosts(posts.map(post => ({ ...post, comments: [], isLiked: false })));
       setIsLoading(false);
     }, 1000);
 
     return () => clearTimeout(timer);
   }, []);
+
+  const handleLike = (postId: string) => {
+    setFeedPosts(prevPosts =>
+      prevPosts.map(post =>
+        post.id === postId
+          ? {
+              ...post,
+              likes: post.isLiked ? post.likes - 1 : post.likes + 1,
+              isLiked: !post.isLiked
+            }
+          : post
+      )
+    );
+  };
+
+  const handleComment = (postId: string) => {
+    if (!newComments[postId]?.trim()) return;
+
+    const newComment: Comment = {
+      id: Date.now().toString(),
+      text: newComments[postId],
+      author: user!,
+      createdAt: 'just now'
+    };
+
+    setFeedPosts(prevPosts =>
+      prevPosts.map(post =>
+        post.id === postId
+          ? { ...post, comments: [...(post.comments || []), newComment] }
+          : post
+      )
+    );
+
+    setNewComments(prev => ({ ...prev, [postId]: '' }));
+  };
 
   const breakpointColumns = {
     default: 3,
@@ -46,7 +83,7 @@ const Home = () => {
         {feedPosts.map((post, index) => (
           <motion.div
             key={post.id}
-            className="card mb-4 hover:transform hover:scale-[1.02] transition-all"
+            className="card mb-4"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: index * 0.1 }}
@@ -72,20 +109,59 @@ const Home = () => {
                 </div>
               </div>
               <p className="text-text-secondary mb-3">{post.caption}</p>
-              <div className="flex justify-between text-text-muted">
+              
+              {/* Actions */}
+              <div className="flex justify-between text-text-muted mb-4">
+                <button 
+                  className={`flex items-center space-x-1 ${post.isLiked ? 'text-accent-pink' : ''}`}
+                  onClick={() => handleLike(post.id)}
+                >
+                  <Heart size={20} fill={post.isLiked ? 'currentColor' : 'none'} />
+                  <span>{post.likes}</span>
+                </button>
                 <div className="flex items-center space-x-1">
-                  <button className="p-1 rounded-full hover:bg-background-light hover:text-accent-pink transition-colors">
-                    <Heart size={18} />
-                  </button>
-                  <span className="text-sm">{post.likes}</span>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <button className="p-1 rounded-full hover:bg-background-light hover:text-accent-pink transition-colors">
-                    <MessageCircle size={18} />
-                  </button>
-                  <span className="text-sm">{post.comments}</span>
+                  <MessageCircle size={20} />
+                  <span>{post.comments?.length || 0}</span>
                 </div>
                 <span className="text-xs">{post.createdAt}</span>
+              </div>
+
+              {/* Comments */}
+              <div className="space-y-3">
+                {post.comments?.map(comment => (
+                  <div key={comment.id} className="flex items-start space-x-2">
+                    <img 
+                      src={comment.author.profilePic} 
+                      alt={comment.author.name} 
+                      className="h-6 w-6 rounded-full object-cover"
+                    />
+                    <div className="flex-1 bg-background-light rounded-lg p-2">
+                      <p className="text-sm">
+                        <span className="font-medium">{comment.author.name}</span>{' '}
+                        {comment.text}
+                      </p>
+                      <p className="text-xs text-text-muted mt-1">{comment.createdAt}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Add Comment */}
+              <div className="mt-4 flex items-center gap-2">
+                <input
+                  type="text"
+                  className="input flex-1 py-1"
+                  placeholder="Add a comment..."
+                  value={newComments[post.id] || ''}
+                  onChange={(e) => setNewComments(prev => ({ ...prev, [post.id]: e.target.value }))}
+                  onKeyPress={(e) => e.key === 'Enter' && handleComment(post.id)}
+                />
+                <button
+                  className="p-2 text-accent-pink"
+                  onClick={() => handleComment(post.id)}
+                >
+                  <Send size={18} />
+                </button>
               </div>
             </div>
           </motion.div>

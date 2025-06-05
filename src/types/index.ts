@@ -10,15 +10,23 @@ export interface User {
   posts: number;
 }
 
+export interface Comment {
+  id: string;
+  text: string;
+  author: User;
+  createdAt: string;
+}
+
 export interface Post {
   id: string;
   imageUrl: string;
   caption: string;
   author: User;
   likes: number;
-  comments: number;
+  comments: Comment[];
   createdAt: string;
   height?: number;
+  isLiked?: boolean;
 }
 
 export interface Snap {
