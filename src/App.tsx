@@ -16,6 +16,7 @@ import Conversation from './pages/Conversation';
 import Profile from './pages/Profile';
 import EditProfile from './pages/EditProfile';
 import NotFound from './pages/NotFound';
+import CreatePost from './pages/CreatePost';
 
 // Context
 import { AuthProvider } from './context/AuthContext';
@@ -41,6 +42,7 @@ function App() {
             <Route path="profile/:userId" element={<Profile />} />
             <Route path="profile" element={<Profile />} />
             <Route path="edit-profile" element={<EditProfile />} />
+            <Route path="create" element={<CreatePost />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>

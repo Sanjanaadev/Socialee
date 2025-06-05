@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { users, posts } from '../data/mockData';
 import { User, Post } from '../types';
-import { MessageSquare, UserPlus, Camera, Settings } from 'lucide-react';
+import { MessageSquare, UserPlus, Camera, Settings, UserCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 
@@ -13,28 +13,56 @@ const Profile = () => {
   const [userPosts, setUserPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('posts');
+  const [isFollowing, setIsFollowing] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    // Determine which user to show
-    // If userId is provided, find that user, otherwise show current user
-    const targetUserId = userId || currentUser?.id || '1';
-    
-    // Simulate API fetch
-    const timer = setTimeout(() => {
-      const foundUser = users.find(u => u.id === targetUserId) || null;
-      setProfileUser(foundUser);
-      
-      // Get posts by this user
-      const userPosts = posts.filter(p => p.author.id === targetUserId);
+    // If no userId is provided and we have a currentUser, use their data
+    if (!userId && currentUser) {
+      setProfileUser(currentUser);
+      const userPosts = posts.filter(p => p.author.id === currentUser.id);
       setUserPosts(userPosts);
-      
       setIsLoading(false);
-    }, 1000);
+      return;
+    }
 
-    return () => clearTimeout(timer);
+    // If userId is provided, find that user
+    const targetUserId = userId || '1';
+    const foundUser = users.find(u => u.id === targetUserId) || null;
+    setProfileUser(foundUser);
+    
+    // Get posts by this user
+    const userPosts = posts.filter(p => p.author.id === targetUserId);
+    setUserPosts(userPosts);
+    
+    // Check if current user is following this profile
+    setIsFollowing(false); // You would check this from your backend
+    
+    setIsLoading(false);
   }, [userId, currentUser]);
 
-  const isCurrentUser = profileUser?.id === currentUser?.id || profileUser?.id === '1';
+  const isCurrentUser = !userId || (profileUser?.id === currentUser?.id);
+
+  const handleEditProfile = () => {
+    navigate('/edit-profile');
+  };
+
+  const handleFollow = () => {
+    if (!profileUser || !currentUser) return;
+
+    setIsFollowing(!isFollowing);
+    if (!isFollowing) {
+      // Increment followers count of profile user
+      profileUser.followers += 1;
+      // Increment following count of current user
+      currentUser.following += 1;
+    } else {
+      // Decrement counts when unfollowing
+      profileUser.followers -= 1;
+      currentUser.following -= 1;
+    }
+    setProfileUser({ ...profileUser });
+  };
 
   if (isLoading) {
     return (
@@ -112,15 +140,30 @@ const Profile = () => {
           {/* Action Buttons */}
           <div className="flex justify-center gap-4 mt-6">
             {isCurrentUser ? (
-              <button className="btn-outline flex items-center gap-2">
+              <button 
+                className="btn-outline flex items-center gap-2"
+                onClick={handleEditProfile}
+              >
                 <Settings size={18} />
                 <span>Edit Profile</span>
               </button>
             ) : (
               <>
-                <button className="btn-primary flex items-center gap-2">
-                  <UserPlus size={18} />
-                  <span>Follow</span>
+                <button 
+                  className={`btn-primary flex items-center gap-2 ${isFollowing ? 'bg-background-light hover:bg-background-card' : ''}`}
+                  onClick={handleFollow}
+                >
+                  {isFollowing ? (
+                    <>
+                      <UserCheck size={18} />
+                      <span>Following</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus size={18} />
+                      <span>Follow</span>
+                    </>
+                  )}
                 </button>
                 <Link to={`/messages`} className="btn-outline flex items-center gap-2">
                   <MessageSquare size={18} />

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Image, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { posts } from '../data/mockData';
 
 const CreatePost = () => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -23,14 +24,30 @@ const CreatePost = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedImage || !caption.trim()) return;
+    if (!selectedImage || !caption.trim() || !user) return;
 
     setIsLoading(true);
     try {
-      // In a real app, this would upload to a server
-      setTimeout(() => {
-        navigate('/home');
-      }, 1000);
+      // Create new post
+      const newPost = {
+        id: `post-${Date.now()}`,
+        imageUrl: selectedImage,
+        caption: caption.trim(),
+        author: user,
+        likes: 0,
+        comments: [],
+        createdAt: 'just now',
+        height: 350
+      };
+
+      // Add to posts array
+      posts.unshift(newPost);
+      
+      // Update user's post count
+      user.posts += 1;
+
+      // Navigate back to home
+      navigate('/home');
     } catch (error) {
       console.error('Error creating post:', error);
     } finally {
