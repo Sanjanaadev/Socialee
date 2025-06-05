@@ -1,10 +1,10 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { User } from '../types';
-import { currentUser } from '../data/mockData';
+import axios from 'axios';
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
   signup: (name: string, username: string, email: string, password: string, profilePic?: File) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
@@ -24,40 +24,52 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+const API_URL = 'http://localhost:5000/api';
+
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(() => {
     const token = localStorage.getItem('socialee_token');
-    return token ? currentUser : null;
+    const userData = localStorage.getItem('socialee_user');
+    return token && userData ? JSON.parse(userData) : null;
   });
 
-  const login = async (email: string, password: string) => {
-    return new Promise<void>((resolve, reject) => {
-      setTimeout(() => {
-        if (email === 'admin' && password === 'admin') {
-          localStorage.setItem('socialee_token', 'mock-jwt-token');
-          setUser(currentUser);
-          resolve();
-        } else {
-          reject(new Error('Invalid credentials'));
-        }
-      }, 1000);
-    });
+  const login = async (username: string, password: string) => {
+    try {
+      const response = await axios.post(`${API_URL}/auth/login`, {
+        username,
+        password
+      });
+      
+      const { token, user } = response.data;
+      localStorage.setItem('socialee_token', token);
+      localStorage.setItem('socialee_user', JSON.stringify(user));
+      setUser(user);
+    } catch (error) {
+      throw new Error('Invalid credentials');
+    }
   };
 
-  const signup = async (name: string, username: string, email: string, password: string, profilePic?: File) => {
-    return new Promise<void>((resolve, reject) => {
-      setTimeout(() => {
-        if (name && username && email && password) {
-          resolve();
-        } else {
-          reject(new Error('All fields are required'));
-        }
-      }, 1000);
-    });
+  const signup = async (name: string, username: string, email: string, password: string) => {
+    try {
+      const response = await axios.post(`${API_URL}/auth/signup`, {
+        name,
+        username,
+        email,
+        password
+      });
+      
+      const { token, user } = response.data;
+      localStorage.setItem('socialee_token', token);
+      localStorage.setItem('socialee_user', JSON.stringify(user));
+      setUser(user);
+    } catch (error) {
+      throw new Error('Error creating account');
+    }
   };
 
   const logout = () => {
     localStorage.removeItem('socialee_token');
+    localStorage.removeItem('socialee_user');
     setUser(null);
   };
 
