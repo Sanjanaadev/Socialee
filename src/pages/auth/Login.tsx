@@ -32,10 +32,24 @@ const Login = () => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
+      className="bg-gradient-to-br from-background-card/50 to-background-dark/50 p-8 rounded-xl backdrop-blur-sm"
     >
       <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-text-primary">Welcome Back</h2>
-        <p className="text-text-secondary mt-2">Discover a place to connect, share, and grow your story with the world.</p>
+        <motion.h2 
+          className="text-3xl font-bold text-text-primary font-['Dancing_Script']"
+          animate={{ 
+            scale: [1, 1.02, 1],
+            opacity: [0.8, 1, 0.8]
+          }}
+          transition={{ 
+            duration: 2,
+            repeat: Infinity,
+            repeatDelay: 1
+          }}
+        >
+          Welcome Back
+        </motion.h2>
+        <p className="text-text-secondary mt-2">Tap in. You know the drill.</p>
       </div>
 
       {error && (

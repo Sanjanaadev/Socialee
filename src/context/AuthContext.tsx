@@ -24,8 +24,6 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-const API_URL = 'http://localhost:5000/api';
-
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(() => {
     const token = localStorage.getItem('socialee_token');
@@ -35,7 +33,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const login = async (username: string, password: string) => {
     try {
-      const response = await axios.post(`${API_URL}/auth/login`, {
+      const response = await axios.post('http://localhost:5000/api/auth/login', {
         username,
         password
       });
@@ -44,14 +42,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       localStorage.setItem('socialee_token', token);
       localStorage.setItem('socialee_user', JSON.stringify(user));
       setUser(user);
-    } catch (error) {
-      throw new Error('Invalid credentials');
+    } catch (error: any) {
+      const message = error.response?.data?.error || 'Invalid credentials';
+      throw new Error(message);
     }
   };
 
   const signup = async (name: string, username: string, email: string, password: string) => {
     try {
-      const response = await axios.post(`${API_URL}/auth/signup`, {
+      const response = await axios.post('http://localhost:5000/api/auth/signup', {
         name,
         username,
         email,
@@ -62,8 +61,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       localStorage.setItem('socialee_token', token);
       localStorage.setItem('socialee_user', JSON.stringify(user));
       setUser(user);
-    } catch (error) {
-      throw new Error('Error creating account');
+    } catch (error: any) {
+      const message = error.response?.data?.error || 'Error creating account';
+      throw new Error(message);
     }
   };
 

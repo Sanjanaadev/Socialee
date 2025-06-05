@@ -13,33 +13,67 @@ const AuthLayout = () => {
         transition={{ duration: 0.5 }}
       >
         <div className="max-w-md mx-auto text-center">
-          <div className="flex items-center justify-center mb-4">
+          <motion.div 
+            className="flex items-center justify-center mb-4"
+            animate={{ 
+              rotate: [0, -10, 10, -10, 0],
+              scale: [1, 1.1, 1]
+            }}
+            transition={{ 
+              duration: 2,
+              repeat: Infinity,
+              repeatDelay: 3
+            }}
+          >
             <MessageSquare className="h-12 w-12 text-accent-pink" />
-          </div>
+          </motion.div>
           <h1 className="text-4xl font-bold mb-4 text-text-primary">Socialee</h1>
-          <p className="text-text-secondary mb-8">
+          <motion.p 
+            className="text-text-secondary mb-8"
+            animate={{ 
+              opacity: [0, 1],
+              y: [20, 0] 
+            }}
+            transition={{ 
+              duration: 1,
+              repeat: Infinity,
+              repeatDelay: 4
+            }}
+          >
             Discover a place to connect, share, and grow your story with the world.
-          </p>
+          </motion.p>
           <div className="grid grid-cols-3 gap-4 mb-8">
-            <div className="bg-background-card p-4 rounded-lg">
+            <motion.div 
+              className="bg-background-card p-4 rounded-lg cursor-pointer"
+              whileHover={{ scale: 1.05, backgroundColor: '#2A2A2A' }}
+              transition={{ type: "spring", stiffness: 300 }}
+            >
               <h3 className="font-medium text-accent-pink">Share</h3>
               <p className="text-text-secondary text-sm mt-2">Moments</p>
-            </div>
-            <div className="bg-background-card p-4 rounded-lg">
+            </motion.div>
+            <motion.div 
+              className="bg-background-card p-4 rounded-lg cursor-pointer"
+              whileHover={{ scale: 1.05, backgroundColor: '#2A2A2A' }}
+              transition={{ type: "spring", stiffness: 300 }}
+            >
               <h3 className="font-medium text-accent-purple">Connect</h3>
               <p className="text-text-secondary text-sm mt-2">With friends</p>
-            </div>
-            <div className="bg-background-card p-4 rounded-lg">
+            </motion.div>
+            <motion.div 
+              className="bg-background-card p-4 rounded-lg cursor-pointer"
+              whileHover={{ scale: 1.05, backgroundColor: '#2A2A2A' }}
+              transition={{ type: "spring", stiffness: 300 }}
+            >
               <h3 className="font-medium text-accent-blue">Express</h3>
               <p className="text-text-secondary text-sm mt-2">Your thoughts</p>
-            </div>
+            </motion.div>
           </div>
         </div>
       </motion.div>
       
       {/* Right side with auth forms */}
       <motion.div 
-        className="bg-background-light w-full md:w-1/2 p-8 flex items-center justify-center"
+        className="bg-gradient-to-br from-background-light via-background-card to-background-dark w-full md:w-1/2 p-8 flex items-center justify-center"
         initial={{ opacity: 0, x: 50 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.5, delay: 0.2 }}

@@ -23,7 +23,6 @@ const Signup = () => {
       const file = e.target.files[0];
       setProfilePic(file);
       
-      // Create a preview URL
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreviewUrl(reader.result as string);
@@ -40,14 +39,19 @@ const Signup = () => {
       setError('Passwords do not match');
       return;
     }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long');
+      return;
+    }
     
     setIsLoading(true);
 
     try {
-      await signup(name, username, email, password, profilePic || undefined);
-      navigate('/'); // Redirect to login after successful signup
-    } catch (err) {
-      setError('Failed to create an account');
+      await signup(name, username, email, password);
+      navigate('/home');
+    } catch (err: any) {
+      setError(err.message || 'Failed to create account');
     } finally {
       setIsLoading(false);
     }
@@ -58,10 +62,24 @@ const Signup = () => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
+      className="bg-gradient-to-br from-background-card/50 to-background-dark/50 p-8 rounded-xl backdrop-blur-sm"
     >
       <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-text-primary">Create Account</h2>
-        <p className="text-text-secondary mt-2">Join Socialee today</p>
+        <motion.h2 
+          className="text-3xl font-bold text-text-primary font-['Dancing_Script']"
+          animate={{ 
+            scale: [1, 1.02, 1],
+            opacity: [0.8, 1, 0.8]
+          }}
+          transition={{ 
+            duration: 2,
+            repeat: Infinity,
+            repeatDelay: 1
+          }}
+        >
+          Join Socialee
+        </motion.h2>
+        <p className="text-text-secondary mt-2">Time to make your mark.</p>
       </div>
 
       {error && (
@@ -71,7 +89,6 @@ const Signup = () => {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Profile Picture Upload */}
         <div className="flex justify-center">
           <div className="relative">
             <div className="h-24 w-24 rounded-full overflow-hidden bg-background-light flex items-center justify-center">
@@ -151,6 +168,7 @@ const Signup = () => {
             className="input"
             placeholder="••••••••"
             required
+            minLength={6}
           />
         </div>
 
@@ -192,4 +210,4 @@ const Signup = () => {
   );
 };
 
-export default Signup;
+export default Signup
