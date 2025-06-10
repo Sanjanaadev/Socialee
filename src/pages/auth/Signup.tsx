@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { User, UploadCloud } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { User, UploadCloud, CheckCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const Signup = () => {
   const [name, setName] = useState('');
@@ -12,8 +12,9 @@ const Signup = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [profilePic, setProfilePic] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [error, setError] = useState('');
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   
   const { signup } = useAuth();
   const navigate = useNavigate();
@@ -21,7 +22,21 @@ const Signup = () => {
   const handleProfilePicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setErrors(prev => ({ ...prev, profilePic: 'Profile picture must be less than 5MB' }));
+        return;
+      }
+      
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setErrors(prev => ({ ...prev, profilePic: 'Please select a valid image file' }));
+        return;
+      }
+      
       setProfilePic(file);
+      setErrors(prev => ({ ...prev, profilePic: '' }));
       
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -31,183 +46,297 @@ const Signup = () => {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
+  const validateForm = () => {
+    const newErrors: { [key: string]: string } = {};
+
+    // Name validation
+    if (!name.trim()) {
+      newErrors.name = 'Full name is required';
+    } else if (name.trim().length < 2) {
+      newErrors.name = 'Name must be at least 2 characters long';
+    } else if (!/^[a-zA-Z\s]+$/.test(name.trim())) {
+      newErrors.name = 'Name can only contain letters and spaces';
     }
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long');
+    // Username validation
+    if (!username.trim()) {
+      newErrors.username = 'Username is required';
+    } else if (username.length < 3) {
+      newErrors.username = 'Username must be at least 3 characters long';
+    } else if (username.length > 20) {
+      newErrors.username = 'Username must be less than 20 characters';
+    } else if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      newErrors.username = 'Username can only contain letters, numbers, and underscores';
+    } else if (username.startsWith('_') || username.endsWith('_')) {
+      newErrors.username = 'Username cannot start or end with underscore';
+    }
+
+    // Email validation
+    if (!email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      newErrors.email = 'Please enter a valid email address';
+    }
+
+    // Password validation
+    if (!password) {
+      newErrors.password = 'Password is required';
+    } else if (password.length < 8) {
+      newErrors.password = 'Password must be at least 8 characters long';
+    } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
+      newErrors.password = 'Password must contain at least one uppercase letter, one lowercase letter, and one number';
+    }
+
+    // Confirm password validation
+    if (!confirmPassword) {
+      newErrors.confirmPassword = 'Please confirm your password';
+    } else if (password !== confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
       return;
     }
     
     setIsLoading(true);
 
     try {
-      await signup(name, username, email, password);
-      navigate('/home');
+      await signup(name.trim(), username.trim(), email.trim(), password);
+      setShowSuccessModal(true);
     } catch (err: any) {
-      setError(err.message || 'Failed to create account');
+      setErrors({ general: err.message || 'Failed to create account' });
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleSuccessModalClose = () => {
+    setShowSuccessModal(false);
+    navigate('/');
+  };
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="bg-gradient-to-br from-background-card/50 to-background-dark/50 p-8 rounded-xl backdrop-blur-sm"
-    >
-      <div className="text-center mb-8">
-        <motion.h2 
-          className="text-3xl font-bold text-text-primary font-['Dancing_Script']"
-          animate={{ 
-            scale: [1, 1.02, 1],
-            opacity: [0.8, 1, 0.8]
-          }}
-          transition={{ 
-            duration: 2,
-            repeat: Infinity,
-            repeatDelay: 1
-          }}
-        >
-          Join Socialee
-        </motion.h2>
-        <p className="text-text-secondary mt-2">Time to make your mark.</p>
-      </div>
-
-      {error && (
-        <div className="bg-error bg-opacity-10 text-error px-4 py-3 rounded-md mb-4">
-          {error}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="flex justify-center">
-          <div className="relative">
-            <div className="h-24 w-24 rounded-full overflow-hidden bg-background-light flex items-center justify-center">
-              {previewUrl ? (
-                <img src={previewUrl} alt="Profile Preview" className="h-full w-full object-cover" />
-              ) : (
-                <User size={40} className="text-text-secondary" />
-              )}
-            </div>
-            <label htmlFor="profile-pic" className="absolute bottom-0 right-0 bg-accent-pink h-8 w-8 rounded-full flex items-center justify-center cursor-pointer">
-              <UploadCloud size={16} className="text-white" />
-              <input
-                id="profile-pic"
-                type="file"
-                className="hidden"
-                accept="image/*"
-                onChange={handleProfilePicChange}
-              />
-            </label>
-          </div>
-        </div>
-
-        <div>
-          <label htmlFor="name" className="block text-sm font-medium text-text-secondary mb-1">
-            Full Name
-          </label>
-          <input
-            id="name"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="input"
-            placeholder="John Doe"
-            required
-          />
-        </div>
-
-        <div>
-          <label htmlFor="username" className="block text-sm font-medium text-text-secondary mb-1">
-            Username
-          </label>
-          <input
-            id="username"
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="input"
-            placeholder="johndoe"
-            required
-          />
-        </div>
-
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-text-secondary mb-1">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="input"
-            placeholder="your@email.com"
-            required
-          />
-        </div>
-
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium text-text-secondary mb-1">
-            Password
-          </label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="input"
-            placeholder="••••••••"
-            required
-            minLength={6}
-          />
-        </div>
-
-        <div>
-          <label htmlFor="confirm-password" className="block text-sm font-medium text-text-secondary mb-1">
-            Confirm Password
-          </label>
-          <input
-            id="confirm-password"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            className="input"
-            placeholder="••••••••"
-            required
-          />
-        </div>
-
-        <div>
-          <button
-            type="submit"
-            className="btn-primary w-full"
-            disabled={isLoading}
+    <>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="bg-gradient-to-br from-background-card/50 to-background-dark/50 p-8 rounded-xl backdrop-blur-sm"
+      >
+        <div className="text-center mb-8">
+          <motion.h2 
+            className="text-3xl font-bold text-text-primary font-['Dancing_Script']"
+            animate={{ 
+              scale: [1, 1.02, 1],
+              opacity: [0.8, 1, 0.8]
+            }}
+            transition={{ 
+              duration: 2,
+              repeat: Infinity,
+              repeatDelay: 1
+            }}
           >
-            {isLoading ? 'Creating Account...' : 'Sign Up'}
-          </button>
+            Join Socialee
+          </motion.h2>
+          <p className="text-text-secondary mt-2">Time to make your mark.</p>
         </div>
-      </form>
 
-      <div className="text-center mt-6">
-        <p className="text-text-secondary">
-          Already have an account?{' '}
-          <Link to="/" className="text-accent-pink hover:underline">
-            Sign in
-          </Link>
-        </p>
-      </div>
-    </motion.div>
+        {errors.general && (
+          <div className="bg-error bg-opacity-10 text-error px-4 py-3 rounded-md mb-4">
+            {errors.general}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex justify-center">
+            <div className="relative">
+              <div className="h-24 w-24 rounded-full overflow-hidden bg-background-light flex items-center justify-center">
+                {previewUrl ? (
+                  <img src={previewUrl} alt="Profile Preview" className="h-full w-full object-cover" />
+                ) : (
+                  <User size={40} className="text-text-secondary" />
+                )}
+              </div>
+              <label htmlFor="profile-pic" className="absolute bottom-0 right-0 bg-accent-pink h-8 w-8 rounded-full flex items-center justify-center cursor-pointer">
+                <UploadCloud size={16} className="text-white" />
+                <input
+                  id="profile-pic"
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  onChange={handleProfilePicChange}
+                />
+              </label>
+            </div>
+          </div>
+          {errors.profilePic && (
+            <p className="text-error text-sm text-center">{errors.profilePic}</p>
+          )}
+
+          <div>
+            <label htmlFor="name" className="block text-sm font-medium text-text-secondary mb-1">
+              Full Name *
+            </label>
+            <input
+              id="name"
+              type="text"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                if (errors.name) setErrors(prev => ({ ...prev, name: '' }));
+              }}
+              className={`input ${errors.name ? 'border-error' : ''}`}
+              placeholder="John Doe"
+              required
+            />
+            {errors.name && <p className="text-error text-sm mt-1">{errors.name}</p>}
+          </div>
+
+          <div>
+            <label htmlFor="username" className="block text-sm font-medium text-text-secondary mb-1">
+              Username *
+            </label>
+            <input
+              id="username"
+              type="text"
+              value={username}
+              onChange={(e) => {
+                setUsername(e.target.value.toLowerCase());
+                if (errors.username) setErrors(prev => ({ ...prev, username: '' }));
+              }}
+              className={`input ${errors.username ? 'border-error' : ''}`}
+              placeholder="johndoe"
+              required
+            />
+            {errors.username && <p className="text-error text-sm mt-1">{errors.username}</p>}
+          </div>
+
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-text-secondary mb-1">
+              Email *
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value.toLowerCase());
+                if (errors.email) setErrors(prev => ({ ...prev, email: '' }));
+              }}
+              className={`input ${errors.email ? 'border-error' : ''}`}
+              placeholder="your@email.com"
+              required
+            />
+            {errors.email && <p className="text-error text-sm mt-1">{errors.email}</p>}
+          </div>
+
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-text-secondary mb-1">
+              Password *
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (errors.password) setErrors(prev => ({ ...prev, password: '' }));
+              }}
+              className={`input ${errors.password ? 'border-error' : ''}`}
+              placeholder="••••••••"
+              required
+            />
+            {errors.password && <p className="text-error text-sm mt-1">{errors.password}</p>}
+            <p className="text-xs text-text-secondary mt-1">
+              Must contain at least 8 characters with uppercase, lowercase, and number
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="confirm-password" className="block text-sm font-medium text-text-secondary mb-1">
+              Confirm Password *
+            </label>
+            <input
+              id="confirm-password"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                if (errors.confirmPassword) setErrors(prev => ({ ...prev, confirmPassword: '' }));
+              }}
+              className={`input ${errors.confirmPassword ? 'border-error' : ''}`}
+              placeholder="••••••••"
+              required
+            />
+            {errors.confirmPassword && <p className="text-error text-sm mt-1">{errors.confirmPassword}</p>}
+          </div>
+
+          <div>
+            <button
+              type="submit"
+              className="btn-primary w-full"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Creating Account...' : 'Sign Up'}
+            </button>
+          </div>
+        </form>
+
+        <div className="text-center mt-6">
+          <p className="text-text-secondary">
+            Already have an account?{' '}
+            <Link to="/" className="text-accent-pink hover:underline">
+              Sign in
+            </Link>
+          </p>
+        </div>
+      </motion.div>
+
+      {/* Success Modal */}
+      <AnimatePresence>
+        {showSuccessModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-background-card rounded-xl p-8 max-w-md w-full text-center"
+            >
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+                className="mx-auto w-16 h-16 bg-accent-pink rounded-full flex items-center justify-center mb-4"
+              >
+                <CheckCircle size={32} className="text-white" />
+              </motion.div>
+              
+              <h2 className="text-2xl font-bold text-text-primary mb-2">
+                Account Created Successfully!
+              </h2>
+              <p className="text-text-secondary mb-6">
+                Welcome to Socialee! You can now sign in with your credentials.
+              </p>
+              
+              <button
+                onClick={handleSuccessModalClose}
+                className="btn-primary w-full"
+              >
+                Continue to Sign In
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </>
   );
 };
 
-export default Signup
+export default Signup;

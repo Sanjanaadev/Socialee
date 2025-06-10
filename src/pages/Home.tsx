@@ -11,16 +11,34 @@ const Home = () => {
   const [feedPosts, setFeedPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [newComments, setNewComments] = useState<{ [key: string]: string }>({});
-  const { user } = useAuth();
+  const { user, followingUsers, registeredUsers } = useAuth();
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setFeedPosts(posts.map(post => ({ ...post, comments: [], isLiked: false })));
+      // Filter posts to show only from followed users and registered users
+      const followedUserIds = followingUsers.map(u => u.id);
+      const registeredUserIds = registeredUsers.map(u => u.id);
+      
+      // Include current user's posts and posts from followed registered users
+      const personalizedPosts = posts.filter(post => {
+        const isCurrentUser = post.author.id === user?.id;
+        const isFollowedUser = followedUserIds.includes(post.author.id);
+        const isRegisteredUser = registeredUserIds.includes(post.author.id);
+        
+        return isCurrentUser || (isFollowedUser && isRegisteredUser);
+      });
+
+      // If no personalized posts, show a welcome message or sample posts from registered users
+      const finalPosts = personalizedPosts.length > 0 
+        ? personalizedPosts 
+        : posts.filter(post => registeredUserIds.includes(post.author.id)).slice(0, 3);
+
+      setFeedPosts(finalPosts.map(post => ({ ...post, comments: [], isLiked: false })));
       setIsLoading(false);
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [followingUsers, registeredUsers, user]);
 
   const handleLike = (postId: string) => {
     setFeedPosts(prevPosts =>
@@ -37,12 +55,12 @@ const Home = () => {
   };
 
   const handleComment = (postId: string) => {
-    if (!newComments[postId]?.trim()) return;
+    if (!newComments[postId]?.trim() || !user) return;
 
     const newComment: Comment = {
       id: Date.now().toString(),
       text: newComments[postId],
-      author: user!,
+      author: user,
       createdAt: 'just now'
     };
 
@@ -66,14 +84,38 @@ const Home = () => {
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-pulse text-accent-pink">Loading posts...</div>
+        <div className="animate-pulse text-accent-pink">Loading your personalized feed...</div>
+      </div>
+    );
+  }
+
+  if (feedPosts.length === 0) {
+    return (
+      <div className="text-center py-16">
+        <h1 className="text-2xl font-bold mb-4">Welcome to Socialee!</h1>
+        <p className="text-text-secondary mb-8 max-w-md mx-auto">
+          Your feed is empty. Start following other users to see their posts here, or create your first post!
+        </p>
+        <div className="flex justify-center gap-4">
+          <Link to="/create" className="btn-primary">
+            Create Post
+          </Link>
+          <Link to="/snaps" className="btn-outline">
+            Explore Snaps
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Home Feed</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">Your Feed</h1>
+        <p className="text-text-secondary text-sm">
+          {feedPosts.length} post{feedPosts.length !== 1 ? 's' : ''} from people you follow
+        </p>
+      </div>
       
       <Masonry
         breakpointCols={breakpointColumns}
@@ -106,6 +148,11 @@ const Home = () => {
                   <Link to={`/profile/${post.author.id}`} className="font-medium hover:text-accent-pink">
                     {post.author.name}
                   </Link>
+                  {post.author.id === user?.id && (
+                    <span className="ml-2 text-xs bg-accent-pink text-white px-2 py-1 rounded-full">
+                      You
+                    </span>
+                  )}
                 </div>
               </div>
               <p className="text-text-secondary mb-3">{post.caption}</p>

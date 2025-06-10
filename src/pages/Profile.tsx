@@ -3,17 +3,19 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { users, posts } from '../data/mockData';
 import { User, Post } from '../types';
 import { MessageSquare, UserPlus, Camera, Settings, UserCheck } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 
 const Profile = () => {
   const { userId } = useParams<{ userId?: string }>();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, registeredUsers, followUser, unfollowUser, isFollowing, followingUsers } = useAuth();
   const [profileUser, setProfileUser] = useState<User | null>(null);
   const [userPosts, setUserPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('posts');
-  const [isFollowing, setIsFollowing] = useState(false);
+  const [showFollowingModal, setShowFollowingModal] = useState(false);
+  const [showFollowersModal, setShowFollowersModal] = useState(false);
+  const [followersList, setFollowersList] = useState<User[]>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -26,42 +28,76 @@ const Profile = () => {
       return;
     }
 
-    // If userId is provided, find that user
-    const targetUserId = userId || '1';
-    const foundUser = users.find(u => u.id === targetUserId) || null;
+    // If userId is provided, find that user from registered users first, then fallback to mock users
+    const targetUserId = userId || currentUser?.id || '1';
+    let foundUser = registeredUsers.find(u => u.id === targetUserId) || 
+                   users.find(u => u.id === targetUserId) || null;
+    
+    // If it's a registered user, get their updated follower/following counts
+    if (foundUser && registeredUsers.some(u => u.id === foundUser.id)) {
+      const storedFollowing = localStorage.getItem(`socialee_following_${foundUser.id}`);
+      const storedFollowers = localStorage.getItem(`socialee_followers_${foundUser.id}`);
+      
+      foundUser = {
+        ...foundUser,
+        following: storedFollowing ? JSON.parse(storedFollowing).length : 0,
+        followers: storedFollowers ? JSON.parse(storedFollowers).length : 0
+      };
+
+      // Load followers list for this user
+      if (storedFollowers) {
+        setFollowersList(JSON.parse(storedFollowers));
+      }
+    }
+    
     setProfileUser(foundUser);
     
     // Get posts by this user
     const userPosts = posts.filter(p => p.author.id === targetUserId);
     setUserPosts(userPosts);
     
-    // Check if current user is following this profile
-    setIsFollowing(false); // You would check this from your backend
-    
     setIsLoading(false);
-  }, [userId, currentUser]);
+  }, [userId, currentUser, registeredUsers]);
 
   const isCurrentUser = !userId || (profileUser?.id === currentUser?.id);
+  const isUserFollowing = profileUser ? isFollowing(profileUser.id) : false;
 
   const handleEditProfile = () => {
     navigate('/edit-profile');
   };
 
   const handleFollow = () => {
-    if (!profileUser || !currentUser) return;
+    if (!profileUser || !currentUser || isCurrentUser) return;
 
-    setIsFollowing(!isFollowing);
-    if (!isFollowing) {
-      // Increment followers count of profile user
-      profileUser.followers += 1;
-      // Increment following count of current user
-      currentUser.following += 1;
+    if (isUserFollowing) {
+      unfollowUser(profileUser.id);
     } else {
-      // Decrement counts when unfollowing
-      profileUser.followers -= 1;
-      currentUser.following -= 1;
+      followUser(profileUser.id);
     }
-    setProfileUser({ ...profileUser });
+
+    // Update the profile user's follower count in real-time
+    const storedFollowers = localStorage.getItem(`socialee_followers_${profileUser.id}`);
+    const followersList = storedFollowers ? JSON.parse(storedFollowers) : [];
+    const newFollowerCount = isUserFollowing ? followersList.length - 1 : followersList.length + 1;
+    
+    setProfileUser(prev => prev ? { ...prev, followers: newFollowerCount } : null);
+
+    // Update followers list
+    if (isUserFollowing) {
+      setFollowersList(prev => prev.filter(f => f.id !== currentUser.id));
+    } else {
+      setFollowersList(prev => [...prev, currentUser]);
+    }
+  };
+
+  const handleFollowingClick = () => {
+    if (isCurrentUser) {
+      setShowFollowingModal(true);
+    }
+  };
+
+  const handleFollowersClick = () => {
+    setShowFollowersModal(true);
   };
 
   if (isLoading) {
@@ -124,15 +160,23 @@ const Profile = () => {
           {/* Stats */}
           <div className="flex justify-center items-center gap-8 mt-4">
             <div className="text-center">
-              <p className="font-bold">{profileUser.posts}</p>
+              <p className="font-bold">{profileUser.posts || 0}</p>
               <p className="text-text-secondary text-sm">Posts</p>
             </div>
-            <div className="text-center">
-              <p className="font-bold">{profileUser.followers}</p>
+            <div 
+              className="text-center cursor-pointer hover:bg-background-light rounded-lg px-3 py-2 transition-colors" 
+              onClick={handleFollowersClick}
+            >
+              <p className="font-bold">{profileUser.followers || 0}</p>
               <p className="text-text-secondary text-sm">Followers</p>
             </div>
-            <div className="text-center">
-              <p className="font-bold">{profileUser.following}</p>
+            <div 
+              className={`text-center rounded-lg px-3 py-2 transition-colors ${
+                isCurrentUser ? 'cursor-pointer hover:bg-background-light' : 'cursor-default'
+              }`}
+              onClick={handleFollowingClick}
+            >
+              <p className="font-bold">{profileUser.following || 0}</p>
               <p className="text-text-secondary text-sm">Following</p>
             </div>
           </div>
@@ -150,10 +194,10 @@ const Profile = () => {
             ) : (
               <>
                 <button 
-                  className={`btn-primary flex items-center gap-2 ${isFollowing ? 'bg-background-light hover:bg-background-card' : ''}`}
+                  className={`btn-primary flex items-center gap-2 ${isUserFollowing ? 'bg-background-light hover:bg-background-card text-text-primary' : ''}`}
                   onClick={handleFollow}
                 >
-                  {isFollowing ? (
+                  {isUserFollowing ? (
                     <>
                       <UserCheck size={18} />
                       <span>Following</span>
@@ -223,6 +267,120 @@ const Profile = () => {
           No saved posts
         </div>
       )}
+
+      {/* Following Modal */}
+      <AnimatePresence>
+        {showFollowingModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-background-card rounded-lg p-6 max-w-md w-full max-h-96 overflow-hidden"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold">Following</h2>
+                <button
+                  onClick={() => setShowFollowingModal(false)}
+                  className="text-text-secondary hover:text-text-primary"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="overflow-y-auto max-h-80">
+                {followingUsers.length === 0 ? (
+                  <div className="text-center py-8 text-text-secondary">
+                    Not following anyone yet
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {followingUsers.map((followedUser) => (
+                      <div key={followedUser.id} className="flex items-center justify-between">
+                        <div className="flex items-center">
+                          <img 
+                            src={followedUser.profilePic} 
+                            alt={followedUser.name} 
+                            className="h-10 w-10 rounded-full object-cover"
+                          />
+                          <div className="ml-3">
+                            <p className="font-medium">{followedUser.name}</p>
+                            <p className="text-sm text-text-secondary">@{followedUser.username}</p>
+                          </div>
+                        </div>
+                        <Link 
+                          to={`/profile/${followedUser.id}`}
+                          className="btn-outline text-sm px-3 py-1"
+                          onClick={() => setShowFollowingModal(false)}
+                        >
+                          View
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Followers Modal */}
+      <AnimatePresence>
+        {showFollowersModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-background-card rounded-lg p-6 max-w-md w-full max-h-96 overflow-hidden"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold">Followers</h2>
+                <button
+                  onClick={() => setShowFollowersModal(false)}
+                  className="text-text-secondary hover:text-text-primary"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="overflow-y-auto max-h-80">
+                {followersList.length === 0 ? (
+                  <div className="text-center py-8 text-text-secondary">
+                    No followers yet
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {followersList.map((follower) => (
+                      <div key={follower.id} className="flex items-center justify-between">
+                        <div className="flex items-center">
+                          <img 
+                            src={follower.profilePic} 
+                            alt={follower.name} 
+                            className="h-10 w-10 rounded-full object-cover"
+                          />
+                          <div className="ml-3">
+                            <p className="font-medium">{follower.name}</p>
+                            <p className="text-sm text-text-secondary">@{follower.username}</p>
+                          </div>
+                        </div>
+                        <Link 
+                          to={`/profile/${follower.id}`}
+                          className="btn-outline text-sm px-3 py-1"
+                          onClick={() => setShowFollowersModal(false)}
+                        >
+                          View
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
