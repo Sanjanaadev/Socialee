@@ -4,10 +4,24 @@ const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-// Signup route
+// Signup route with better logging
 router.post('/signup', async (req, res) => {
   try {
+    console.log('📝 Signup attempt:', { 
+      name: req.body.name, 
+      username: req.body.username, 
+      email: req.body.email 
+    });
+    
     const { name, username, email, password } = req.body;
+
+    // Validate required fields
+    if (!name || !username || !email || !password) {
+      console.log('❌ Missing required fields');
+      return res.status(400).json({ 
+        error: 'All fields are required' 
+      });
+    }
 
     // Check if user already exists
     const existingUser = await User.findOne({ 
@@ -15,6 +29,7 @@ router.post('/signup', async (req, res) => {
     });
 
     if (existingUser) {
+      console.log('❌ User already exists:', existingUser.email);
       return res.status(400).json({ 
         error: 'User with this email or username already exists' 
       });
@@ -32,11 +47,13 @@ router.post('/signup', async (req, res) => {
       password: hashedPassword
     });
 
-    await newUser.save();
+    console.log('💾 Saving user to database...');
+    const savedUser = await newUser.save();
+    console.log('✅ User saved successfully:', savedUser._id);
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: newUser._id },
+      { userId: savedUser._id },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '7d' }
     );
@@ -44,35 +61,47 @@ router.post('/signup', async (req, res) => {
     res.status(201).json({
       token,
       user: {
-        id: newUser._id,
-        name: newUser.name,
-        username: newUser.username,
-        email: newUser.email,
-        profilePic: newUser.profilePic
+        id: savedUser._id,
+        name: savedUser.name,
+        username: savedUser.username,
+        email: savedUser.email,
+        profilePic: savedUser.profilePic
       }
     });
   } catch (err) {
-    console.error('Signup error:', err);
-    res.status(500).json({ error: 'Error signing up' });
+    console.error('❌ Signup error:', err);
+    res.status(500).json({ error: 'Error signing up: ' + err.message });
   }
 });
 
-// Login route
+// Login route with better logging
 router.post('/login', async (req, res) => {
   try {
+    console.log('🔐 Login attempt:', { username: req.body.username });
+    
     const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
 
     // Find user
     const user = await User.findOne({ username });
     if (!user) {
+      console.log('❌ User not found:', username);
       return res.status(400).json({ error: 'Invalid credentials' });
     }
+
+    console.log('👤 User found:', user.username);
 
     // Check password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
+      console.log('❌ Password mismatch for user:', username);
       return res.status(400).json({ error: 'Invalid credentials' });
     }
+
+    console.log('✅ Login successful for user:', username);
 
     // Generate JWT token
     const token = jwt.sign(
@@ -92,8 +121,8 @@ router.post('/login', async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('Login error:', err);
-    res.status(500).json({ error: 'Error logging in' });
+    console.error('❌ Login error:', err);
+    res.status(500).json({ error: 'Error logging in: ' + err.message });
   }
 });
 
