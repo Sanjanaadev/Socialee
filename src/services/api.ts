@@ -9,6 +9,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 10000, // 10 second timeout
 });
 
 // Add auth token to requests
@@ -19,6 +20,20 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// Add response interceptor for better error handling
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Token expired or invalid
+      localStorage.removeItem('socialee_token');
+      localStorage.removeItem('socialee_user');
+      window.location.href = '/';
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Auth API calls
 export const authAPI = {
@@ -84,7 +99,15 @@ export const usersAPI = {
   },
 
   searchUsers: async (query: string) => {
-    const response = await api.get(`/users/search?q=${query}`);
+    const response = await api.get(`/users/search?q=${encodeURIComponent(query)}`);
+    return response.data;
+  },
+};
+
+// Health check
+export const healthAPI = {
+  check: async () => {
+    const response = await api.get('/health');
     return response.data;
   },
 };
