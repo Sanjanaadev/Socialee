@@ -10,32 +10,42 @@ interface HeaderProps {
 }
 
 const Header = ({ toggleSidebar }: HeaderProps) => {
-  const { user, registeredUsers } = useAuth();
+  const { user, searchUsers } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [searchResults, setSearchResults] = useState<UserType[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  // Filter users based on search query - show all users when typing
+  // Search users from backend
   useEffect(() => {
-    if (searchQuery.trim() === '') {
-      setSearchResults([]);
-      setShowSearchResults(false);
-      return;
-    }
+    const searchUsersFromBackend = async () => {
+      if (searchQuery.trim() === '') {
+        setSearchResults([]);
+        setShowSearchResults(false);
+        return;
+      }
 
-    // Show all registered users that match the search query (excluding current user)
-    const filtered = registeredUsers.filter(u => 
-      u.id !== user?.id && (
-        u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        u.username.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    );
-    
-    setSearchResults(filtered);
-    setShowSearchResults(true);
-  }, [searchQuery, registeredUsers, user]);
+      setIsSearching(true);
+      try {
+        const results = await searchUsers(searchQuery);
+        // Filter out current user from results
+        const filteredResults = results.filter(u => u.id !== user?.id);
+        setSearchResults(filteredResults);
+        setShowSearchResults(true);
+      } catch (error) {
+        console.error('Search error:', error);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    };
+
+    // Debounce search
+    const timeoutId = setTimeout(searchUsersFromBackend, 300);
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, user, searchUsers]);
 
   // Close search results when clicking outside
   useEffect(() => {
@@ -108,7 +118,11 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
               exit={{ opacity: 0, y: -10 }}
               className="absolute top-full left-0 right-0 mt-2 bg-background-card rounded-lg shadow-lg border border-border z-50 max-h-80 overflow-y-auto"
             >
-              {searchResults.length === 0 ? (
+              {isSearching ? (
+                <div className="p-4 text-center text-text-secondary">
+                  Searching...
+                </div>
+              ) : searchResults.length === 0 ? (
                 <div className="p-4 text-center text-text-secondary">
                   {searchQuery.trim() === '' ? 'Start typing to search users...' : 'No users found'}
                 </div>
@@ -164,56 +178,9 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
                 <h3 className="font-medium">Notifications</h3>
               </div>
               <div className="max-h-96 overflow-y-auto">
-                <div className="px-4 py-3 hover:bg-background-light">
-                  <div className="flex items-start">
-                    <img 
-                      src="https://images.pexels.com/photos/614810/pexels-photo-614810.jpeg?auto=compress&cs=tinysrgb&w=600" 
-                      alt="User" 
-                      className="h-10 w-10 rounded-full object-cover"
-                    />
-                    <div className="ml-3">
-                      <p className="text-sm">
-                        <span className="font-medium">Jordan Lee</span> liked your post
-                      </p>
-                      <p className="text-xs text-text-secondary mt-1">2 minutes ago</p>
-                    </div>
-                  </div>
+                <div className="px-4 py-8 text-center text-text-secondary">
+                  No notifications yet
                 </div>
-                <div className="px-4 py-3 hover:bg-background-light">
-                  <div className="flex items-start">
-                    <img 
-                      src="https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=600" 
-                      alt="User" 
-                      className="h-10 w-10 rounded-full object-cover"
-                    />
-                    <div className="ml-3">
-                      <p className="text-sm">
-                        <span className="font-medium">Taylor Swift</span> commented on your post
-                      </p>
-                      <p className="text-xs text-text-secondary mt-1">15 minutes ago</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="px-4 py-3 hover:bg-background-light">
-                  <div className="flex items-start">
-                    <img 
-                      src="https://images.pexels.com/photos/1681010/pexels-photo-1681010.jpeg?auto=compress&cs=tinysrgb&w=600" 
-                      alt="User" 
-                      className="h-10 w-10 rounded-full object-cover"
-                    />
-                    <div className="ml-3">
-                      <p className="text-sm">
-                        <span className="font-medium">Jamie Chen</span> started following you
-                      </p>
-                      <p className="text-xs text-text-secondary mt-1">1 hour ago</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="px-4 py-2 border-t border-border">
-                <button className="text-sm text-accent-pink hover:underline">
-                  See all notifications
-                </button>
               </div>
             </div>
           )}

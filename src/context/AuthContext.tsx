@@ -57,10 +57,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (user) {
         const profileData = await usersAPI.getProfile(user.id);
         const updatedUser = {
-          ...profileData,
-          posts: 0, // Will be calculated from actual posts
+          id: profileData._id,
+          name: profileData.name,
+          username: profileData.username,
+          email: profileData.email,
+          profilePic: profileData.profilePic || '',
+          bio: profileData.bio || '',
           followers: profileData.followers?.length || 0,
-          following: profileData.following?.length || 0
+          following: profileData.following?.length || 0,
+          posts: 0 // Will be calculated from actual posts
         };
         setUser(updatedUser);
         setFollowingUsers(profileData.following || []);
@@ -68,6 +73,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
     } catch (error) {
       console.error('Error loading user profile:', error);
+      // If token is invalid, clear it
+      if (error.response?.status === 401) {
+        logout();
+      }
     }
   };
 
@@ -122,6 +131,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       const formattedUser = {
         ...user,
         ...updatedUser,
+        id: updatedUser._id || user.id,
         followers: updatedUser.followers?.length || user.followers,
         following: updatedUser.following?.length || user.following,
       };

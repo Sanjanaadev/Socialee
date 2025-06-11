@@ -62,7 +62,11 @@ const Home = () => {
       setFeedPosts(formattedPosts);
     } catch (error: any) {
       console.error('Error loading feed:', error);
-      toast.error('Failed to load posts');
+      if (error.response?.status === 401) {
+        toast.error('Please log in to view your feed');
+      } else {
+        toast.error('Failed to load posts');
+      }
     } finally {
       setIsLoading(false);
     }

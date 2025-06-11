@@ -40,6 +40,17 @@ router.put('/profile', auth, async (req, res) => {
       }
     }
 
+    // Check if email is already taken by another user
+    if (email) {
+      const existingUser = await User.findOne({ 
+        email, 
+        _id: { $ne: req.userId } 
+      });
+      if (existingUser) {
+        return res.status(400).json({ error: 'Email already taken' });
+      }
+    }
+
     const updatedUser = await User.findByIdAndUpdate(
       req.userId,
       { name, username, email, bio, profilePic },
