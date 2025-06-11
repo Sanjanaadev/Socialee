@@ -1,20 +1,64 @@
-import { Search, Menu, Bell } from 'lucide-react';
-import { useState } from 'react';
+import { Search, Menu, Bell, User } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Link } from 'react-router-dom';
+import { User as UserType } from '../../types';
 
 interface HeaderProps {
   toggleSidebar: () => void;
 }
 
 const Header = ({ toggleSidebar }: HeaderProps) => {
-  const { user } = useAuth();
+  const { user, registeredUsers } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [searchResults, setSearchResults] = useState<UserType[]>([]);
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  // Filter users based on search query
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+
+    const filtered = registeredUsers.filter(u => 
+      u.id !== user?.id && (
+        u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        u.username.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    );
+    
+    setSearchResults(filtered);
+    setShowSearchResults(true);
+  }, [searchQuery, registeredUsers, user]);
+
+  // Close search results when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSearchResults(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    alert(`Search for: ${searchQuery}`);
+    if (searchResults.length > 0) {
+      // Navigate to first result
+      window.location.href = `/profile/${searchResults[0].id}`;
+    }
+  };
+
+  const handleUserClick = (userId: string) => {
+    setSearchQuery('');
+    setShowSearchResults(false);
   };
 
   return (
@@ -33,7 +77,7 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
       </button>
 
       {/* Search bar */}
-      <div className="hidden md:block flex-1 max-w-md">
+      <div className="hidden md:block flex-1 max-w-md relative" ref={searchRef}>
         <form onSubmit={handleSearch} className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <Search size={18} className="text-text-secondary" />
@@ -41,11 +85,57 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
           <input 
             type="text" 
             className="input pl-10"
-            placeholder="Search Socialee..."
+            placeholder="Search users..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => searchQuery && setShowSearchResults(true)}
           />
         </form>
+
+        {/* Search Results Dropdown */}
+        <AnimatePresence>
+          {showSearchResults && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="absolute top-full left-0 right-0 mt-2 bg-background-card rounded-lg shadow-lg border border-border z-50 max-h-80 overflow-y-auto"
+            >
+              {searchResults.length === 0 ? (
+                <div className="p-4 text-center text-text-secondary">
+                  No users found
+                </div>
+              ) : (
+                <div className="py-2">
+                  {searchResults.map((searchUser) => (
+                    <Link
+                      key={searchUser.id}
+                      to={`/profile/${searchUser.id}`}
+                      className="flex items-center px-4 py-3 hover:bg-background-light transition-colors"
+                      onClick={() => handleUserClick(searchUser.id)}
+                    >
+                      <div className="h-10 w-10 rounded-full overflow-hidden bg-background-light flex items-center justify-center">
+                        {searchUser.profilePic ? (
+                          <img 
+                            src={searchUser.profilePic} 
+                            alt={searchUser.name} 
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <User size={20} className="text-text-secondary" />
+                        )}
+                      </div>
+                      <div className="ml-3">
+                        <p className="font-medium text-text-primary">{searchUser.name}</p>
+                        <p className="text-sm text-text-secondary">@{searchUser.username}</p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Right side actions */}
@@ -124,11 +214,17 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
 
         {/* User profile */}
         <div className="flex items-center">
-          <img 
-            src={user?.profilePic || 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=600'} 
-            alt="Profile" 
-            className="h-8 w-8 rounded-full object-cover"
-          />
+          <div className="h-8 w-8 rounded-full overflow-hidden bg-background-light flex items-center justify-center">
+            {user?.profilePic ? (
+              <img 
+                src={user.profilePic} 
+                alt="Profile" 
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <User size={16} className="text-text-secondary" />
+            )}
+          </div>
         </div>
       </div>
     </motion.header>

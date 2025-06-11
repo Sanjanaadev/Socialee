@@ -12,6 +12,8 @@ interface AuthContextType {
   followUser: (userId: string) => void;
   unfollowUser: (userId: string) => void;
   isFollowing: (userId: string) => boolean;
+  updateProfile: (profileData: Partial<User>) => Promise<void>;
+  updateProfilePicture: (file: File) => Promise<string>;
   isAuthenticated: boolean;
 }
 
@@ -106,6 +108,46 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
+  const updateProfile = async (profileData: Partial<User>) => {
+    if (!user) throw new Error('No user logged in');
+
+    try {
+      // Update user data
+      const updatedUser = { ...user, ...profileData };
+      setUser(updatedUser);
+      localStorage.setItem('socialee_user', JSON.stringify(updatedUser));
+
+      // Update in registered users list
+      const updatedRegisteredUsers = registeredUsers.map(u => 
+        u.id === user.id ? updatedUser : u
+      );
+      setRegisteredUsers(updatedRegisteredUsers);
+      localStorage.setItem('socialee_registered_users', JSON.stringify(updatedRegisteredUsers));
+
+      // Update in following users list if present
+      const updatedFollowingUsers = followingUsers.map(u => 
+        u.id === user.id ? updatedUser : u
+      );
+      setFollowingUsers(updatedFollowingUsers);
+      localStorage.setItem(`socialee_following_${user.id}`, JSON.stringify(updatedFollowingUsers));
+
+    } catch (error) {
+      throw new Error('Failed to update profile');
+    }
+  };
+
+  const updateProfilePicture = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        resolve(result);
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+  };
+
   const followUser = (userId: string) => {
     if (!user) return;
 
@@ -184,6 +226,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     followUser,
     unfollowUser,
     isFollowing,
+    updateProfile,
+    updateProfilePicture,
     isAuthenticated: !!user,
   };
 

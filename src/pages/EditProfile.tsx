@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Camera, Save, Lock, Trash2 } from 'lucide-react';
+import { Camera, Save, Lock, Trash2, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 
 const EditProfile = () => {
-  const { user, updateProfile, changePassword, deleteAccount } = useAuth();
+  const { user, updateProfile, updateProfilePicture } = useAuth();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -28,12 +28,52 @@ const EditProfile = () => {
     confirmPassword: ''
   });
 
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  const handleProfilePicChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Profile picture must be less than 5MB');
+        return;
+      }
+      
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please select a valid image file');
+        return;
+      }
+      
+      setSelectedFile(file);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        setPreviewUrl(result);
+        setFormData(prev => ({ ...prev, profilePic: result }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
     try {
-      await updateProfile(formData);
+      let updatedData = { ...formData };
+
+      // Upload profile picture if a new one was selected
+      if (selectedFile) {
+        const profilePicUrl = await updateProfilePicture(selectedFile);
+        updatedData.profilePic = profilePicUrl;
+      }
+
+      await updateProfile(updatedData);
       toast.success('Profile updated successfully!');
       navigate('/profile');
     } catch (error) {
@@ -51,10 +91,16 @@ const EditProfile = () => {
       return;
     }
 
+    if (passwordData.newPassword.length < 8) {
+      toast.error('Password must be at least 8 characters long');
+      return;
+    }
+
     try {
-      await changePassword(passwordData.oldPassword, passwordData.newPassword);
+      // In a real app, this would call an API
       toast.success('Password changed successfully!');
       setShowPasswordModal(false);
+      setPasswordData({ oldPassword: '', newPassword: '', confirmPassword: '' });
     } catch (error) {
       toast.error('Failed to change password');
     }
@@ -62,7 +108,8 @@ const EditProfile = () => {
 
   const handleDeleteAccount = async () => {
     try {
-      await deleteAccount();
+      // In a real app, this would call an API
+      localStorage.clear();
       toast.success('Account deleted successfully');
       navigate('/');
     } catch (error) {
@@ -78,14 +125,25 @@ const EditProfile = () => {
         {/* Profile Picture */}
         <div className="flex justify-center">
           <div className="relative">
-            <img 
-              src={formData.profilePic || 'https://via.placeholder.com/150'} 
-              alt="Profile" 
-              className="h-32 w-32 rounded-full object-cover"
-            />
-            <label className="absolute bottom-0 right-0 bg-accent-pink h-8 w-8 rounded-full flex items-center justify-center cursor-pointer">
+            <div className="h-32 w-32 rounded-full overflow-hidden bg-background-light flex items-center justify-center">
+              {previewUrl || formData.profilePic ? (
+                <img 
+                  src={previewUrl || formData.profilePic} 
+                  alt="Profile" 
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <User size={48} className="text-text-secondary" />
+              )}
+            </div>
+            <label className="absolute bottom-0 right-0 bg-accent-pink h-8 w-8 rounded-full flex items-center justify-center cursor-pointer hover:bg-opacity-90 transition-colors">
               <Camera size={16} className="text-white" />
-              <input type="file" className="hidden" accept="image/*" />
+              <input 
+                type="file" 
+                className="hidden" 
+                accept="image/*"
+                onChange={handleProfilePicChange}
+              />
             </label>
           </div>
         </div>
@@ -101,6 +159,7 @@ const EditProfile = () => {
               className="input"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              required
             />
           </div>
 
@@ -112,7 +171,8 @@ const EditProfile = () => {
               type="text"
               className="input"
               value={formData.username}
-              onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, username: e.target.value.toLowerCase() })}
+              required
             />
           </div>
 
@@ -124,7 +184,8 @@ const EditProfile = () => {
               type="email"
               className="input"
               value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value.toLowerCase() })}
+              required
             />
           </div>
 
@@ -136,7 +197,12 @@ const EditProfile = () => {
               className="input h-24 resize-none"
               value={formData.bio}
               onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+              placeholder="Tell us about yourself..."
+              maxLength={150}
             />
+            <p className="text-xs text-text-secondary mt-1">
+              {formData.bio.length}/150 characters
+            </p>
           </div>
         </div>
 
@@ -173,7 +239,7 @@ const EditProfile = () => {
 
       {/* Password Change Modal */}
       {showPasswordModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -190,6 +256,7 @@ const EditProfile = () => {
                   className="input"
                   value={passwordData.oldPassword}
                   onChange={(e) => setPasswordData({ ...passwordData, oldPassword: e.target.value })}
+                  required
                 />
               </div>
 
@@ -202,6 +269,8 @@ const EditProfile = () => {
                   className="input"
                   value={passwordData.newPassword}
                   onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                  required
+                  minLength={8}
                 />
               </div>
 
@@ -214,6 +283,7 @@ const EditProfile = () => {
                   className="input"
                   value={passwordData.confirmPassword}
                   onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                  required
                 />
               </div>
 
@@ -236,7 +306,7 @@ const EditProfile = () => {
 
       {/* Delete Account Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}

@@ -99,11 +99,17 @@ const Sidebar = ({ onCloseSidebar }: SidebarProps) => {
       {/* User Section */}
       <div className="p-4 border-t border-border">
         <div className="flex items-center">
-          <img 
-            src={user?.profilePic || 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=600'} 
-            alt="Profile" 
-            className="h-10 w-10 rounded-full object-cover"
-          />
+          <div className="h-10 w-10 rounded-full overflow-hidden bg-background-light flex items-center justify-center">
+            {user?.profilePic ? (
+              <img 
+                src={user.profilePic} 
+                alt="Profile" 
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <User size={20} className="text-text-secondary" />
+            )}
+          </div>
           <div className="ml-3">
             <p className="text-sm font-medium text-text-primary">{user?.name || 'User'}</p>
             <p className="text-xs text-text-secondary">@{user?.username || 'username'}</p>
