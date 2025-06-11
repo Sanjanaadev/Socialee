@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { users, posts } from '../data/mockData';
+import { users } from '../data/mockData';
 import { User, Post } from '../types';
 import { MessageSquare, UserPlus, Camera, Settings, UserCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -22,8 +22,12 @@ const Profile = () => {
     // If no userId is provided and we have a currentUser, use their data
     if (!userId && currentUser) {
       setProfileUser(currentUser);
-      const userPosts = posts.filter(p => p.author.id === currentUser.id);
-      setUserPosts(userPosts);
+      
+      // Load user's posts from localStorage
+      const storedPosts = localStorage.getItem(`socialee_posts_${currentUser.id}`);
+      const posts = storedPosts ? JSON.parse(storedPosts) : [];
+      setUserPosts(posts);
+      
       setIsLoading(false);
       return;
     }
@@ -48,14 +52,14 @@ const Profile = () => {
       if (storedFollowers) {
         setFollowersList(JSON.parse(storedFollowers));
       }
+
+      // Load user's posts from localStorage
+      const storedPosts = localStorage.getItem(`socialee_posts_${foundUser.id}`);
+      const posts = storedPosts ? JSON.parse(storedPosts) : [];
+      setUserPosts(posts);
     }
     
     setProfileUser(foundUser);
-    
-    // Get posts by this user
-    const userPosts = posts.filter(p => p.author.id === targetUserId);
-    setUserPosts(userPosts);
-    
     setIsLoading(false);
   }, [userId, currentUser, registeredUsers]);
 
@@ -160,7 +164,7 @@ const Profile = () => {
           {/* Stats */}
           <div className="flex justify-center items-center gap-8 mt-4">
             <div className="text-center">
-              <p className="font-bold">{profileUser.posts || 0}</p>
+              <p className="font-bold">{userPosts.length}</p>
               <p className="text-text-secondary text-sm">Posts</p>
             </div>
             <div 
@@ -241,7 +245,20 @@ const Profile = () => {
       {activeTab === 'posts' ? (
         userPosts.length === 0 ? (
           <div className="text-center py-10 text-text-secondary">
-            No posts yet
+            {isCurrentUser ? (
+              <div>
+                <h3 className="text-lg font-medium mb-2">No posts yet</h3>
+                <p className="mb-4">Share your first post to get started!</p>
+                <Link to="/create" className="btn-primary">
+                  Create Post
+                </Link>
+              </div>
+            ) : (
+              <div>
+                <h3 className="text-lg font-medium mb-2">No posts yet</h3>
+                <p>{profileUser.name} hasn't shared any posts.</p>
+              </div>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">

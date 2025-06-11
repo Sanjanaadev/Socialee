@@ -14,6 +14,7 @@ interface AuthContextType {
   isFollowing: (userId: string) => boolean;
   updateProfile: (profileData: Partial<User>) => Promise<void>;
   updateProfilePicture: (file: File) => Promise<string>;
+  updatePassword: (oldPassword: string, newPassword: string) => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -50,23 +51,30 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const login = async (username: string, password: string) => {
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/login', {
-        username,
-        password
-      });
-      
-      const { token, user: loggedInUser } = response.data;
+      // Check if user exists in registered users
+      const foundUser = registeredUsers.find(u => u.username === username);
+      if (!foundUser) {
+        throw new Error('Invalid credentials');
+      }
+
+      // Get stored password for this user
+      const storedPassword = localStorage.getItem(`socialee_password_${foundUser.id}`);
+      if (!storedPassword || storedPassword !== password) {
+        throw new Error('Invalid credentials');
+      }
       
       // Add following and followers count from localStorage if exists
-      const storedFollowing = localStorage.getItem(`socialee_following_${loggedInUser.id}`);
-      const storedFollowers = localStorage.getItem(`socialee_followers_${loggedInUser.id}`);
+      const storedFollowing = localStorage.getItem(`socialee_following_${foundUser.id}`);
+      const storedFollowers = localStorage.getItem(`socialee_followers_${foundUser.id}`);
       
       const updatedUser = {
-        ...loggedInUser,
+        ...foundUser,
         following: storedFollowing ? JSON.parse(storedFollowing).length : 0,
         followers: storedFollowers ? JSON.parse(storedFollowers).length : 0
       };
       
+      // Generate a simple token
+      const token = `token_${foundUser.id}_${Date.now()}`;
       localStorage.setItem('socialee_token', token);
       localStorage.setItem('socialee_user', JSON.stringify(updatedUser));
       setUser(updatedUser);
@@ -77,21 +85,33 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setFollowingUsers(JSON.parse(followingList));
       }
     } catch (error: any) {
-      const message = error.response?.data?.error || 'Invalid credentials';
-      throw new Error(message);
+      throw new Error(error.message || 'Invalid credentials');
     }
   };
 
   const signup = async (name: string, username: string, email: string, password: string) => {
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/signup', {
-        name,
-        username,
-        email,
-        password
-      });
+      // Check if user already exists
+      const existingUser = registeredUsers.find(u => u.username === username || u.email === email);
+      if (existingUser) {
+        throw new Error('User with this email or username already exists');
+      }
+
+      // Create new user
+      const newUser: User = {
+        id: `user_${Date.now()}`,
+        name: name.trim(),
+        username: username.trim(),
+        email: email.trim(),
+        profilePic: '',
+        bio: '',
+        followers: 0,
+        following: 0,
+        posts: 0
+      };
       
-      const { user: newUser } = response.data;
+      // Store password separately
+      localStorage.setItem(`socialee_password_${newUser.id}`, password);
       
       // Add to registered users list
       const updatedRegisteredUsers = [...registeredUsers, newUser];
@@ -103,8 +123,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       localStorage.setItem(`socialee_followers_${newUser.id}`, JSON.stringify([]));
       
     } catch (error: any) {
-      const message = error.response?.data?.error || 'Error creating account';
-      throw new Error(message);
+      throw new Error(error.message || 'Error creating account');
     }
   };
 
@@ -133,6 +152,25 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     } catch (error) {
       throw new Error('Failed to update profile');
+    }
+  };
+
+  const updatePassword = async (oldPassword: string, newPassword: string) => {
+    if (!user) throw new Error('No user logged in');
+
+    try {
+      // Get current stored password
+      const storedPassword = localStorage.getItem(`socialee_password_${user.id}`);
+      
+      if (!storedPassword || storedPassword !== oldPassword) {
+        throw new Error('Current password is incorrect');
+      }
+
+      // Update password
+      localStorage.setItem(`socialee_password_${user.id}`, newPassword);
+      
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to update password');
     }
   };
 
@@ -228,6 +266,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     isFollowing,
     updateProfile,
     updateProfilePicture,
+    updatePassword,
     isAuthenticated: !!user,
   };
 

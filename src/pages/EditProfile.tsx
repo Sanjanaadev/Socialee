@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 
 const EditProfile = () => {
-  const { user, updateProfile, updateProfilePicture } = useAuth();
+  const { user, updateProfile, updateProfilePicture, updatePassword } = useAuth();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -97,12 +97,12 @@ const EditProfile = () => {
     }
 
     try {
-      // In a real app, this would call an API
+      await updatePassword(passwordData.oldPassword, passwordData.newPassword);
       toast.success('Password changed successfully!');
       setShowPasswordModal(false);
       setPasswordData({ oldPassword: '', newPassword: '', confirmPassword: '' });
-    } catch (error) {
-      toast.error('Failed to change password');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to change password');
     }
   };
 
@@ -312,24 +312,26 @@ const EditProfile = () => {
             animate={{ opacity: 1, scale: 1 }}
             className="bg-background-card rounded-lg p-6 max-w-md w-full"
           >
-            <h2 className="text-xl font-bold mb-4">Delete Account</h2>
-            <p className="text-text-secondary mb-6">
-              Are you sure you want to delete your account? This action cannot be undone.
-            </p>
-            <div className="flex justify-end gap-4">
-              <button
-                className="btn-outline"
-                onClick={() => setShowDeleteModal(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn bg-error hover:bg-opacity-90 text-white"
-                onClick={handleDeleteAccount}
-              >
-                Delete Account
-              </button>
-            </div>
+            <>
+              <h2 className="text-xl font-bold mb-4">Delete Account</h2>
+              <p className="text-text-secondary mb-6">
+                Are you sure you want to delete your account? This action cannot be undone.
+              </p>
+              <div className="flex justify-end gap-4">
+                <button
+                  className="btn-outline"
+                  onClick={() => setShowDeleteModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn bg-error hover:bg-opacity-90 text-white"
+                  onClick={handleDeleteAccount}
+                >
+                  Delete Account
+                </button>
+              </div>
+            </>
           </motion.div>
         </div>
       )}

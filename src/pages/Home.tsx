@@ -15,25 +15,43 @@ const Home = () => {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      // Filter posts to show only from followed users and registered users
-      const followedUserIds = followingUsers.map(u => u.id);
-      const registeredUserIds = registeredUsers.map(u => u.id);
+      // Get all posts from localStorage for all users
+      const allUserPosts: Post[] = [];
       
-      // Include current user's posts and posts from followed registered users
-      const personalizedPosts = posts.filter(post => {
-        const isCurrentUser = post.author.id === user?.id;
-        const isFollowedUser = followedUserIds.includes(post.author.id);
-        const isRegisteredUser = registeredUserIds.includes(post.author.id);
-        
-        return isCurrentUser || (isFollowedUser && isRegisteredUser);
+      // Get current user's posts
+      if (user) {
+        const userPosts = localStorage.getItem(`socialee_posts_${user.id}`);
+        if (userPosts) {
+          const parsedPosts = JSON.parse(userPosts);
+          allUserPosts.push(...parsedPosts);
+        }
+      }
+
+      // Get posts from followed users
+      followingUsers.forEach(followedUser => {
+        const userPosts = localStorage.getItem(`socialee_posts_${followedUser.id}`);
+        if (userPosts) {
+          const parsedPosts = JSON.parse(userPosts);
+          allUserPosts.push(...parsedPosts);
+        }
       });
 
-      // If no personalized posts, show a welcome message or sample posts from registered users
-      const finalPosts = personalizedPosts.length > 0 
-        ? personalizedPosts 
-        : posts.filter(post => registeredUserIds.includes(post.author.id)).slice(0, 3);
+      // If no posts from followed users, show some sample posts from registered users
+      if (allUserPosts.length === 0) {
+        const samplePosts = posts.filter(post => 
+          registeredUsers.some(u => u.id === post.author.id)
+        ).slice(0, 3);
+        allUserPosts.push(...samplePosts);
+      }
 
-      setFeedPosts(finalPosts.map(post => ({ ...post, comments: [], isLiked: false })));
+      // Sort posts by creation time (newest first)
+      allUserPosts.sort((a, b) => {
+        if (a.createdAt === 'just now') return -1;
+        if (b.createdAt === 'just now') return 1;
+        return 0;
+      });
+
+      setFeedPosts(allUserPosts.map(post => ({ ...post, comments: post.comments || [], isLiked: false })));
       setIsLoading(false);
     }, 1000);
 

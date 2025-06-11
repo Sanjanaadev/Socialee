@@ -17,7 +17,7 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
   const [searchResults, setSearchResults] = useState<UserType[]>([]);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  // Filter users based on search query
+  // Filter users based on search query - show all users when typing
   useEffect(() => {
     if (searchQuery.trim() === '') {
       setSearchResults([]);
@@ -25,6 +25,7 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
       return;
     }
 
+    // Show all registered users that match the search query (excluding current user)
     const filtered = registeredUsers.filter(u => 
       u.id !== user?.id && (
         u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -61,6 +62,12 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
     setShowSearchResults(false);
   };
 
+  const handleSearchFocus = () => {
+    if (searchQuery.trim() !== '') {
+      setShowSearchResults(true);
+    }
+  };
+
   return (
     <motion.header 
       className="bg-background-dark border-b border-border py-3 px-4 flex items-center justify-between"
@@ -88,7 +95,7 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
             placeholder="Search users..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            onFocus={() => searchQuery && setShowSearchResults(true)}
+            onFocus={handleSearchFocus}
           />
         </form>
 
@@ -103,7 +110,7 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
             >
               {searchResults.length === 0 ? (
                 <div className="p-4 text-center text-text-secondary">
-                  No users found
+                  {searchQuery.trim() === '' ? 'Start typing to search users...' : 'No users found'}
                 </div>
               ) : (
                 <div className="py-2">
