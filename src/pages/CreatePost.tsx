@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Image, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { posts } from '../data/mockData';
+import { postsAPI } from '../services/api';
+import { toast } from 'react-hot-toast';
 
 const CreatePost = () => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -14,11 +15,25 @@ const CreatePost = () => {
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image must be less than 5MB');
+        return;
+      }
+      
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please select a valid image file');
+        return;
+      }
+      
       const reader = new FileReader();
       reader.onload = (e) => {
         setSelectedImage(e.target?.result as string);
       };
-      reader.readAsDataURL(e.target.files[0]);
+      reader.readAsDataURL(file);
     }
   };
 
@@ -28,28 +43,16 @@ const CreatePost = () => {
 
     setIsLoading(true);
     try {
-      // Create new post
-      const newPost = {
-        id: `post-${Date.now()}`,
+      await postsAPI.createPost({
         imageUrl: selectedImage,
-        caption: caption.trim(),
-        author: user,
-        likes: 0,
-        comments: [],
-        createdAt: 'just now',
-        height: 350
-      };
-
-      // Add to posts array
-      posts.unshift(newPost);
+        caption: caption.trim()
+      });
       
-      // Update user's post count
-      user.posts += 1;
-
-      // Navigate back to home
+      toast.success('Post created successfully!');
       navigate('/home');
-    } catch (error) {
-      console.error('Error creating post:', error);
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || 'Failed to create post';
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -72,12 +75,12 @@ const CreatePost = () => {
               <img
                 src={selectedImage}
                 alt="Selected"
-                className="w-full rounded-lg"
+                className="w-full rounded-lg max-h-96 object-cover"
               />
               <button
                 type="button"
                 onClick={() => setSelectedImage(null)}
-                className="absolute top-2 right-2 p-2 bg-background-dark rounded-full"
+                className="absolute top-2 right-2 p-2 bg-background-dark rounded-full hover:bg-background-light transition-colors"
               >
                 <X size={20} />
               </button>
@@ -86,6 +89,7 @@ const CreatePost = () => {
             <label className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-accent-pink transition-colors">
               <Image size={48} className="text-text-secondary mb-4" />
               <span className="text-text-secondary">Click to upload an image</span>
+              <span className="text-xs text-text-muted mt-2">Max 5MB</span>
               <input
                 type="file"
                 className="hidden"
@@ -106,7 +110,11 @@ const CreatePost = () => {
             placeholder="Write a caption..."
             value={caption}
             onChange={(e) => setCaption(e.target.value)}
+            maxLength={500}
           />
+          <p className="text-xs text-text-secondary mt-1">
+            {caption.length}/500 characters
+          </p>
         </div>
 
         {/* Submit Button */}

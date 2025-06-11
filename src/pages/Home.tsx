@@ -1,96 +1,128 @@
 import { useState, useEffect } from 'react';
-import { posts } from '../data/mockData';
 import { Link } from 'react-router-dom';
 import { Heart, MessageCircle, Send } from 'lucide-react';
 import { Post, Comment } from '../types';
 import Masonry from 'react-masonry-css';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { postsAPI } from '../services/api';
+import { toast } from 'react-hot-toast';
+import { formatDistanceToNow } from 'date-fns';
 
 const Home = () => {
   const [feedPosts, setFeedPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [newComments, setNewComments] = useState<{ [key: string]: string }>({});
-  const { user, followingUsers, registeredUsers } = useAuth();
+  const { user } = useAuth();
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      // Get all posts from localStorage for all users
-      const allUserPosts: Post[] = [];
+    loadFeedPosts();
+  }, []);
+
+  const loadFeedPosts = async () => {
+    try {
+      const posts = await postsAPI.getFeedPosts();
+      const formattedPosts = posts.map((post: any) => ({
+        id: post._id,
+        imageUrl: post.imageUrl,
+        caption: post.caption,
+        author: {
+          id: post.author._id,
+          name: post.author.name,
+          username: post.author.username,
+          email: post.author.email || '',
+          profilePic: post.author.profilePic || '',
+          bio: post.author.bio || '',
+          followers: 0,
+          following: 0,
+          posts: 0
+        },
+        likes: post.likes?.length || 0,
+        comments: post.comments?.map((comment: any) => ({
+          id: comment._id,
+          text: comment.text,
+          author: {
+            id: comment.author._id,
+            name: comment.author.name,
+            username: comment.author.username,
+            email: comment.author.email || '',
+            profilePic: comment.author.profilePic || '',
+            bio: comment.author.bio || '',
+            followers: 0,
+            following: 0,
+            posts: 0
+          },
+          createdAt: formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })
+        })) || [],
+        createdAt: formatDistanceToNow(new Date(post.createdAt), { addSuffix: true }),
+        height: 350,
+        isLiked: post.likes?.includes(user?.id) || false
+      }));
       
-      // Get current user's posts
-      if (user) {
-        const userPosts = localStorage.getItem(`socialee_posts_${user.id}`);
-        if (userPosts) {
-          const parsedPosts = JSON.parse(userPosts);
-          allUserPosts.push(...parsedPosts);
-        }
-      }
-
-      // Get posts from followed users
-      followingUsers.forEach(followedUser => {
-        const userPosts = localStorage.getItem(`socialee_posts_${followedUser.id}`);
-        if (userPosts) {
-          const parsedPosts = JSON.parse(userPosts);
-          allUserPosts.push(...parsedPosts);
-        }
-      });
-
-      // If no posts from followed users, show some sample posts from registered users
-      if (allUserPosts.length === 0) {
-        const samplePosts = posts.filter(post => 
-          registeredUsers.some(u => u.id === post.author.id)
-        ).slice(0, 3);
-        allUserPosts.push(...samplePosts);
-      }
-
-      // Sort posts by creation time (newest first)
-      allUserPosts.sort((a, b) => {
-        if (a.createdAt === 'just now') return -1;
-        if (b.createdAt === 'just now') return 1;
-        return 0;
-      });
-
-      setFeedPosts(allUserPosts.map(post => ({ ...post, comments: post.comments || [], isLiked: false })));
+      setFeedPosts(formattedPosts);
+    } catch (error: any) {
+      console.error('Error loading feed:', error);
+      toast.error('Failed to load posts');
+    } finally {
       setIsLoading(false);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [followingUsers, registeredUsers, user]);
-
-  const handleLike = (postId: string) => {
-    setFeedPosts(prevPosts =>
-      prevPosts.map(post =>
-        post.id === postId
-          ? {
-              ...post,
-              likes: post.isLiked ? post.likes - 1 : post.likes + 1,
-              isLiked: !post.isLiked
-            }
-          : post
-      )
-    );
+    }
   };
 
-  const handleComment = (postId: string) => {
+  const handleLike = async (postId: string) => {
+    try {
+      const response = await postsAPI.likePost(postId);
+      
+      setFeedPosts(prevPosts =>
+        prevPosts.map(post =>
+          post.id === postId
+            ? {
+                ...post,
+                likes: response.likes,
+                isLiked: response.isLiked
+              }
+            : post
+        )
+      );
+    } catch (error: any) {
+      toast.error('Failed to like post');
+    }
+  };
+
+  const handleComment = async (postId: string) => {
     if (!newComments[postId]?.trim() || !user) return;
 
-    const newComment: Comment = {
-      id: Date.now().toString(),
-      text: newComments[postId],
-      author: user,
-      createdAt: 'just now'
-    };
+    try {
+      const comment = await postsAPI.addComment(postId, newComments[postId]);
+      
+      const formattedComment: Comment = {
+        id: comment._id,
+        text: comment.text,
+        author: {
+          id: comment.author._id,
+          name: comment.author.name,
+          username: comment.author.username,
+          email: comment.author.email || '',
+          profilePic: comment.author.profilePic || '',
+          bio: comment.author.bio || '',
+          followers: 0,
+          following: 0,
+          posts: 0
+        },
+        createdAt: 'just now'
+      };
 
-    setFeedPosts(prevPosts =>
-      prevPosts.map(post =>
-        post.id === postId
-          ? { ...post, comments: [...(post.comments || []), newComment] }
-          : post
-      )
-    );
+      setFeedPosts(prevPosts =>
+        prevPosts.map(post =>
+          post.id === postId
+            ? { ...post, comments: [...post.comments, formattedComment] }
+            : post
+        )
+      );
 
-    setNewComments(prev => ({ ...prev, [postId]: '' }));
+      setNewComments(prev => ({ ...prev, [postId]: '' }));
+    } catch (error: any) {
+      toast.error('Failed to add comment');
+    }
   };
 
   const breakpointColumns = {
@@ -156,11 +188,19 @@ const Home = () => {
             <div className="p-4">
               <div className="flex items-center mb-3">
                 <Link to={`/profile/${post.author.id}`}>
-                  <img 
-                    src={post.author.profilePic} 
-                    alt={post.author.name} 
-                    className="h-8 w-8 rounded-full object-cover"
-                  />
+                  <div className="h-8 w-8 rounded-full overflow-hidden bg-background-light flex items-center justify-center">
+                    {post.author.profilePic ? (
+                      <img 
+                        src={post.author.profilePic} 
+                        alt={post.author.name} 
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-xs font-medium">
+                        {post.author.name.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
                 </Link>
                 <div className="ml-3">
                   <Link to={`/profile/${post.author.id}`} className="font-medium hover:text-accent-pink">
@@ -178,7 +218,7 @@ const Home = () => {
               {/* Actions */}
               <div className="flex justify-between text-text-muted mb-4">
                 <button 
-                  className={`flex items-center space-x-1 ${post.isLiked ? 'text-accent-pink' : ''}`}
+                  className={`flex items-center space-x-1 transition-colors ${post.isLiked ? 'text-accent-pink' : 'hover:text-accent-pink'}`}
                   onClick={() => handleLike(post.id)}
                 >
                   <Heart size={20} fill={post.isLiked ? 'currentColor' : 'none'} />
@@ -195,11 +235,19 @@ const Home = () => {
               <div className="space-y-3">
                 {post.comments?.map(comment => (
                   <div key={comment.id} className="flex items-start space-x-2">
-                    <img 
-                      src={comment.author.profilePic} 
-                      alt={comment.author.name} 
-                      className="h-6 w-6 rounded-full object-cover"
-                    />
+                    <div className="h-6 w-6 rounded-full overflow-hidden bg-background-light flex items-center justify-center">
+                      {comment.author.profilePic ? (
+                        <img 
+                          src={comment.author.profilePic} 
+                          alt={comment.author.name} 
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-xs font-medium">
+                          {comment.author.name.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex-1 bg-background-light rounded-lg p-2">
                       <p className="text-sm">
                         <span className="font-medium">{comment.author.name}</span>{' '}
@@ -222,7 +270,7 @@ const Home = () => {
                   onKeyPress={(e) => e.key === 'Enter' && handleComment(post.id)}
                 />
                 <button
-                  className="p-2 text-accent-pink"
+                  className="p-2 text-accent-pink hover:bg-background-light rounded-md transition-colors"
                   onClick={() => handleComment(post.id)}
                 >
                   <Send size={18} />

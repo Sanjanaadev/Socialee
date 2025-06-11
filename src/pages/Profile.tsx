@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { users } from '../data/mockData';
 import { User, Post } from '../types';
 import { MessageSquare, UserPlus, Camera, Settings, UserCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { usersAPI, postsAPI } from '../services/api';
+import { toast } from 'react-hot-toast';
 
 const Profile = () => {
   const { userId } = useParams<{ userId?: string }>();
-  const { user: currentUser, registeredUsers, followUser, unfollowUser, isFollowing, followingUsers } = useAuth();
+  const { user: currentUser, followUser, unfollowUser, isFollowing, followingUsers } = useAuth();
   const [profileUser, setProfileUser] = useState<User | null>(null);
   const [userPosts, setUserPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -19,49 +20,57 @@ const Profile = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // If no userId is provided and we have a currentUser, use their data
-    if (!userId && currentUser) {
-      setProfileUser(currentUser);
-      
-      // Load user's posts from localStorage
-      const storedPosts = localStorage.getItem(`socialee_posts_${currentUser.id}`);
-      const posts = storedPosts ? JSON.parse(storedPosts) : [];
-      setUserPosts(posts);
-      
-      setIsLoading(false);
-      return;
-    }
+    loadProfile();
+  }, [userId, currentUser]);
 
-    // If userId is provided, find that user from registered users first, then fallback to mock users
-    const targetUserId = userId || currentUser?.id || '1';
-    let foundUser = registeredUsers.find(u => u.id === targetUserId) || 
-                   users.find(u => u.id === targetUserId) || null;
-    
-    // If it's a registered user, get their updated follower/following counts
-    if (foundUser && registeredUsers.some(u => u.id === foundUser.id)) {
-      const storedFollowing = localStorage.getItem(`socialee_following_${foundUser.id}`);
-      const storedFollowers = localStorage.getItem(`socialee_followers_${foundUser.id}`);
-      
-      foundUser = {
-        ...foundUser,
-        following: storedFollowing ? JSON.parse(storedFollowing).length : 0,
-        followers: storedFollowers ? JSON.parse(storedFollowers).length : 0
+  const loadProfile = async () => {
+    setIsLoading(true);
+    try {
+      const targetUserId = userId || currentUser?.id;
+      if (!targetUserId) return;
+
+      // Load user profile
+      const userData = await usersAPI.getProfile(targetUserId);
+      const formattedUser: User = {
+        id: userData._id,
+        name: userData.name,
+        username: userData.username,
+        email: userData.email || '',
+        profilePic: userData.profilePic || '',
+        bio: userData.bio || '',
+        followers: userData.followers?.length || 0,
+        following: userData.following?.length || 0,
+        posts: 0 // Will be updated after loading posts
       };
 
-      // Load followers list for this user
-      if (storedFollowers) {
-        setFollowersList(JSON.parse(storedFollowers));
-      }
+      setProfileUser(formattedUser);
+      setFollowersList(userData.followers || []);
 
-      // Load user's posts from localStorage
-      const storedPosts = localStorage.getItem(`socialee_posts_${foundUser.id}`);
-      const posts = storedPosts ? JSON.parse(storedPosts) : [];
-      setUserPosts(posts);
+      // Load user posts
+      const posts = await postsAPI.getUserPosts(targetUserId);
+      const formattedPosts = posts.map((post: any) => ({
+        id: post._id,
+        imageUrl: post.imageUrl,
+        caption: post.caption,
+        author: formattedUser,
+        likes: post.likes?.length || 0,
+        comments: post.comments || [],
+        createdAt: new Date(post.createdAt).toLocaleDateString(),
+        height: 350
+      }));
+
+      setUserPosts(formattedPosts);
+      
+      // Update posts count
+      setProfileUser(prev => prev ? { ...prev, posts: formattedPosts.length } : null);
+
+    } catch (error: any) {
+      console.error('Error loading profile:', error);
+      toast.error('Failed to load profile');
+    } finally {
+      setIsLoading(false);
     }
-    
-    setProfileUser(foundUser);
-    setIsLoading(false);
-  }, [userId, currentUser, registeredUsers]);
+  };
 
   const isCurrentUser = !userId || (profileUser?.id === currentUser?.id);
   const isUserFollowing = profileUser ? isFollowing(profileUser.id) : false;
@@ -70,27 +79,21 @@ const Profile = () => {
     navigate('/edit-profile');
   };
 
-  const handleFollow = () => {
+  const handleFollow = async () => {
     if (!profileUser || !currentUser || isCurrentUser) return;
 
-    if (isUserFollowing) {
-      unfollowUser(profileUser.id);
-    } else {
-      followUser(profileUser.id);
-    }
-
-    // Update the profile user's follower count in real-time
-    const storedFollowers = localStorage.getItem(`socialee_followers_${profileUser.id}`);
-    const followersList = storedFollowers ? JSON.parse(storedFollowers) : [];
-    const newFollowerCount = isUserFollowing ? followersList.length - 1 : followersList.length + 1;
-    
-    setProfileUser(prev => prev ? { ...prev, followers: newFollowerCount } : null);
-
-    // Update followers list
-    if (isUserFollowing) {
-      setFollowersList(prev => prev.filter(f => f.id !== currentUser.id));
-    } else {
-      setFollowersList(prev => [...prev, currentUser]);
+    try {
+      if (isUserFollowing) {
+        await unfollowUser(profileUser.id);
+        setProfileUser(prev => prev ? { ...prev, followers: prev.followers - 1 } : null);
+        setFollowersList(prev => prev.filter(f => f._id !== currentUser.id));
+      } else {
+        await followUser(profileUser.id);
+        setProfileUser(prev => prev ? { ...prev, followers: prev.followers + 1 } : null);
+        setFollowersList(prev => [...prev, currentUser]);
+      }
+    } catch (error) {
+      // Error handling is done in the auth context
     }
   };
 
@@ -141,11 +144,19 @@ const Profile = () => {
           {/* Profile Picture */}
           <div className="absolute left-1/2 transform -translate-x-1/2 -bottom-12">
             <div className="relative">
-              <img 
-                src={profileUser.profilePic} 
-                alt={profileUser.name} 
-                className="h-24 w-24 rounded-full object-cover border-4 border-background-dark"
-              />
+              <div className="h-24 w-24 rounded-full overflow-hidden bg-background-light flex items-center justify-center border-4 border-background-dark">
+                {profileUser.profilePic ? (
+                  <img 
+                    src={profileUser.profilePic} 
+                    alt={profileUser.name} 
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="text-2xl font-bold text-text-secondary">
+                    {profileUser.name.charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </div>
               {isCurrentUser && (
                 <button className="absolute bottom-0 right-0 bg-accent-pink h-8 w-8 rounded-full flex items-center justify-center">
                   <Camera size={16} className="text-white" />
@@ -273,7 +284,7 @@ const Profile = () => {
                 <img 
                   src={post.imageUrl} 
                   alt={post.caption} 
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-cover hover:scale-105 transition-transform duration-300"
                 />
               </motion.div>
             ))}
@@ -313,20 +324,28 @@ const Profile = () => {
                 ) : (
                   <div className="space-y-3">
                     {followingUsers.map((followedUser) => (
-                      <div key={followedUser.id} className="flex items-center justify-between">
+                      <div key={followedUser.id || followedUser._id} className="flex items-center justify-between">
                         <div className="flex items-center">
-                          <img 
-                            src={followedUser.profilePic} 
-                            alt={followedUser.name} 
-                            className="h-10 w-10 rounded-full object-cover"
-                          />
+                          <div className="h-10 w-10 rounded-full overflow-hidden bg-background-light flex items-center justify-center">
+                            {followedUser.profilePic ? (
+                              <img 
+                                src={followedUser.profilePic} 
+                                alt={followedUser.name} 
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <span className="font-medium">
+                                {followedUser.name.charAt(0).toUpperCase()}
+                              </span>
+                            )}
+                          </div>
                           <div className="ml-3">
                             <p className="font-medium">{followedUser.name}</p>
                             <p className="text-sm text-text-secondary">@{followedUser.username}</p>
                           </div>
                         </div>
                         <Link 
-                          to={`/profile/${followedUser.id}`}
+                          to={`/profile/${followedUser.id || followedUser._id}`}
                           className="btn-outline text-sm px-3 py-1"
                           onClick={() => setShowFollowingModal(false)}
                         >
@@ -370,20 +389,28 @@ const Profile = () => {
                 ) : (
                   <div className="space-y-3">
                     {followersList.map((follower) => (
-                      <div key={follower.id} className="flex items-center justify-between">
+                      <div key={follower._id || follower.id} className="flex items-center justify-between">
                         <div className="flex items-center">
-                          <img 
-                            src={follower.profilePic} 
-                            alt={follower.name} 
-                            className="h-10 w-10 rounded-full object-cover"
-                          />
+                          <div className="h-10 w-10 rounded-full overflow-hidden bg-background-light flex items-center justify-center">
+                            {follower.profilePic ? (
+                              <img 
+                                src={follower.profilePic} 
+                                alt={follower.name} 
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <span className="font-medium">
+                                {follower.name.charAt(0).toUpperCase()}
+                              </span>
+                            )}
+                          </div>
                           <div className="ml-3">
                             <p className="font-medium">{follower.name}</p>
                             <p className="text-sm text-text-secondary">@{follower.username}</p>
                           </div>
                         </div>
                         <Link 
-                          to={`/profile/${follower.id}`}
+                          to={`/profile/${follower._id || follower.id}`}
                           className="btn-outline text-sm px-3 py-1"
                           onClick={() => setShowFollowersModal(false)}
                         >

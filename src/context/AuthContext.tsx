@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { User } from '../types';
-import axios from 'axios';
+import { authAPI, usersAPI } from '../services/api';
+import { toast } from 'react-hot-toast';
 
 interface AuthContextType {
   user: User | null;
@@ -9,13 +10,14 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<void>;
   signup: (name: string, username: string, email: string, password: string, profilePic?: File) => Promise<void>;
   logout: () => void;
-  followUser: (userId: string) => void;
-  unfollowUser: (userId: string) => void;
+  followUser: (userId: string) => Promise<void>;
+  unfollowUser: (userId: string) => Promise<void>;
   isFollowing: (userId: string) => boolean;
   updateProfile: (profileData: Partial<User>) => Promise<void>;
   updateProfilePicture: (file: File) => Promise<string>;
   updatePassword: (oldPassword: string, newPassword: string) => Promise<void>;
   isAuthenticated: boolean;
+  searchUsers: (query: string) => Promise<User[]>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -39,91 +41,76 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     return token && userData ? JSON.parse(userData) : null;
   });
 
-  const [registeredUsers, setRegisteredUsers] = useState<User[]>(() => {
-    const stored = localStorage.getItem('socialee_registered_users');
-    return stored ? JSON.parse(stored) : [];
-  });
+  const [registeredUsers, setRegisteredUsers] = useState<User[]>([]);
+  const [followingUsers, setFollowingUsers] = useState<User[]>([]);
 
-  const [followingUsers, setFollowingUsers] = useState<User[]>(() => {
-    const stored = localStorage.getItem('socialee_following_users');
-    return stored ? JSON.parse(stored) : [];
-  });
+  // Load user data on mount if token exists
+  useEffect(() => {
+    const token = localStorage.getItem('socialee_token');
+    if (token && user) {
+      loadUserProfile();
+    }
+  }, []);
+
+  const loadUserProfile = async () => {
+    try {
+      if (user) {
+        const profileData = await usersAPI.getProfile(user.id);
+        const updatedUser = {
+          ...profileData,
+          posts: 0, // Will be calculated from actual posts
+          followers: profileData.followers?.length || 0,
+          following: profileData.following?.length || 0
+        };
+        setUser(updatedUser);
+        setFollowingUsers(profileData.following || []);
+        localStorage.setItem('socialee_user', JSON.stringify(updatedUser));
+      }
+    } catch (error) {
+      console.error('Error loading user profile:', error);
+    }
+  };
 
   const login = async (username: string, password: string) => {
     try {
-      // Check if user exists in registered users
-      const foundUser = registeredUsers.find(u => u.username === username);
-      if (!foundUser) {
-        throw new Error('Invalid credentials');
-      }
-
-      // Get stored password for this user
-      const storedPassword = localStorage.getItem(`socialee_password_${foundUser.id}`);
-      if (!storedPassword || storedPassword !== password) {
-        throw new Error('Invalid credentials');
-      }
+      const response = await authAPI.login(username, password);
+      const { token, user: userData } = response;
       
-      // Add following and followers count from localStorage if exists
-      const storedFollowing = localStorage.getItem(`socialee_following_${foundUser.id}`);
-      const storedFollowers = localStorage.getItem(`socialee_followers_${foundUser.id}`);
-      
-      const updatedUser = {
-        ...foundUser,
-        following: storedFollowing ? JSON.parse(storedFollowing).length : 0,
-        followers: storedFollowers ? JSON.parse(storedFollowers).length : 0
+      const formattedUser = {
+        id: userData.id,
+        name: userData.name,
+        username: userData.username,
+        email: userData.email,
+        profilePic: userData.profilePic || '',
+        bio: userData.bio || '',
+        followers: userData.followers?.length || 0,
+        following: userData.following?.length || 0,
+        posts: 0
       };
       
-      // Generate a simple token
-      const token = `token_${foundUser.id}_${Date.now()}`;
       localStorage.setItem('socialee_token', token);
-      localStorage.setItem('socialee_user', JSON.stringify(updatedUser));
-      setUser(updatedUser);
-
-      // Load following users for this user
-      const followingList = localStorage.getItem(`socialee_following_${updatedUser.id}`);
-      if (followingList) {
-        setFollowingUsers(JSON.parse(followingList));
+      localStorage.setItem('socialee_user', JSON.stringify(formattedUser));
+      setUser(formattedUser);
+      
+      // Load following users
+      if (userData.following) {
+        setFollowingUsers(userData.following);
       }
+      
+      toast.success('Welcome back!');
     } catch (error: any) {
-      throw new Error(error.message || 'Invalid credentials');
+      const errorMessage = error.response?.data?.error || 'Login failed';
+      throw new Error(errorMessage);
     }
   };
 
   const signup = async (name: string, username: string, email: string, password: string) => {
     try {
-      // Check if user already exists
-      const existingUser = registeredUsers.find(u => u.username === username || u.email === email);
-      if (existingUser) {
-        throw new Error('User with this email or username already exists');
-      }
-
-      // Create new user
-      const newUser: User = {
-        id: `user_${Date.now()}`,
-        name: name.trim(),
-        username: username.trim(),
-        email: email.trim(),
-        profilePic: '',
-        bio: '',
-        followers: 0,
-        following: 0,
-        posts: 0
-      };
-      
-      // Store password separately
-      localStorage.setItem(`socialee_password_${newUser.id}`, password);
-      
-      // Add to registered users list
-      const updatedRegisteredUsers = [...registeredUsers, newUser];
-      setRegisteredUsers(updatedRegisteredUsers);
-      localStorage.setItem('socialee_registered_users', JSON.stringify(updatedRegisteredUsers));
-      
-      // Initialize following/followers for new user
-      localStorage.setItem(`socialee_following_${newUser.id}`, JSON.stringify([]));
-      localStorage.setItem(`socialee_followers_${newUser.id}`, JSON.stringify([]));
-      
+      const response = await authAPI.signup(name, username, email, password);
+      toast.success('Account created successfully! Please log in.');
     } catch (error: any) {
-      throw new Error(error.message || 'Error creating account');
+      const errorMessage = error.response?.data?.error || 'Signup failed';
+      throw new Error(errorMessage);
     }
   };
 
@@ -131,47 +118,26 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     if (!user) throw new Error('No user logged in');
 
     try {
-      // Update user data
-      const updatedUser = { ...user, ...profileData };
-      setUser(updatedUser);
-      localStorage.setItem('socialee_user', JSON.stringify(updatedUser));
-
-      // Update in registered users list
-      const updatedRegisteredUsers = registeredUsers.map(u => 
-        u.id === user.id ? updatedUser : u
-      );
-      setRegisteredUsers(updatedRegisteredUsers);
-      localStorage.setItem('socialee_registered_users', JSON.stringify(updatedRegisteredUsers));
-
-      // Update in following users list if present
-      const updatedFollowingUsers = followingUsers.map(u => 
-        u.id === user.id ? updatedUser : u
-      );
-      setFollowingUsers(updatedFollowingUsers);
-      localStorage.setItem(`socialee_following_${user.id}`, JSON.stringify(updatedFollowingUsers));
-
-    } catch (error) {
-      throw new Error('Failed to update profile');
+      const updatedUser = await usersAPI.updateProfile(profileData);
+      const formattedUser = {
+        ...user,
+        ...updatedUser,
+        followers: updatedUser.followers?.length || user.followers,
+        following: updatedUser.following?.length || user.following,
+      };
+      
+      setUser(formattedUser);
+      localStorage.setItem('socialee_user', JSON.stringify(formattedUser));
+      toast.success('Profile updated successfully!');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || 'Failed to update profile';
+      throw new Error(errorMessage);
     }
   };
 
   const updatePassword = async (oldPassword: string, newPassword: string) => {
-    if (!user) throw new Error('No user logged in');
-
-    try {
-      // Get current stored password
-      const storedPassword = localStorage.getItem(`socialee_password_${user.id}`);
-      
-      if (!storedPassword || storedPassword !== oldPassword) {
-        throw new Error('Current password is incorrect');
-      }
-
-      // Update password
-      localStorage.setItem(`socialee_password_${user.id}`, newPassword);
-      
-    } catch (error: any) {
-      throw new Error(error.message || 'Failed to update password');
-    }
+    // This would need to be implemented in the backend
+    throw new Error('Password update not implemented yet');
   };
 
   const updateProfilePicture = async (file: File): Promise<string> => {
@@ -186,65 +152,60 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     });
   };
 
-  const followUser = (userId: string) => {
+  const followUser = async (userId: string) => {
     if (!user) return;
 
-    const userToFollow = registeredUsers.find(u => u.id === userId);
-    if (!userToFollow) return;
-
-    // Add to following list
-    const updatedFollowing = [...followingUsers, userToFollow];
-    setFollowingUsers(updatedFollowing);
-    localStorage.setItem(`socialee_following_${user.id}`, JSON.stringify(updatedFollowing));
-
-    // Update current user's following count
-    const updatedUser = { ...user, following: updatedFollowing.length };
-    setUser(updatedUser);
-    localStorage.setItem('socialee_user', JSON.stringify(updatedUser));
-
-    // Update followed user's followers count
-    const currentFollowers = localStorage.getItem(`socialee_followers_${userId}`);
-    const followersList = currentFollowers ? JSON.parse(currentFollowers) : [];
-    const updatedFollowers = [...followersList, user];
-    localStorage.setItem(`socialee_followers_${userId}`, JSON.stringify(updatedFollowers));
-
-    // Update registered users list with new follower count
-    const updatedRegisteredUsers = registeredUsers.map(u => 
-      u.id === userId ? { ...u, followers: updatedFollowers.length } : u
-    );
-    setRegisteredUsers(updatedRegisteredUsers);
-    localStorage.setItem('socialee_registered_users', JSON.stringify(updatedRegisteredUsers));
+    try {
+      await usersAPI.followUser(userId);
+      
+      // Reload user profile to get updated following list
+      await loadUserProfile();
+      
+      toast.success('User followed successfully!');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || 'Failed to follow user';
+      toast.error(errorMessage);
+    }
   };
 
-  const unfollowUser = (userId: string) => {
+  const unfollowUser = async (userId: string) => {
     if (!user) return;
 
-    // Remove from following list
-    const updatedFollowing = followingUsers.filter(u => u.id !== userId);
-    setFollowingUsers(updatedFollowing);
-    localStorage.setItem(`socialee_following_${user.id}`, JSON.stringify(updatedFollowing));
-
-    // Update current user's following count
-    const updatedUser = { ...user, following: updatedFollowing.length };
-    setUser(updatedUser);
-    localStorage.setItem('socialee_user', JSON.stringify(updatedUser));
-
-    // Update unfollowed user's followers count
-    const currentFollowers = localStorage.getItem(`socialee_followers_${userId}`);
-    const followersList = currentFollowers ? JSON.parse(currentFollowers) : [];
-    const updatedFollowers = followersList.filter((follower: User) => follower.id !== user.id);
-    localStorage.setItem(`socialee_followers_${userId}`, JSON.stringify(updatedFollowers));
-
-    // Update registered users list with new follower count
-    const updatedRegisteredUsers = registeredUsers.map(u => 
-      u.id === userId ? { ...u, followers: updatedFollowers.length } : u
-    );
-    setRegisteredUsers(updatedRegisteredUsers);
-    localStorage.setItem('socialee_registered_users', JSON.stringify(updatedRegisteredUsers));
+    try {
+      await usersAPI.unfollowUser(userId);
+      
+      // Reload user profile to get updated following list
+      await loadUserProfile();
+      
+      toast.success('User unfollowed successfully!');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || 'Failed to unfollow user';
+      toast.error(errorMessage);
+    }
   };
 
   const isFollowing = (userId: string) => {
-    return followingUsers.some(u => u.id === userId);
+    return followingUsers.some(u => u._id === userId || u.id === userId);
+  };
+
+  const searchUsers = async (query: string): Promise<User[]> => {
+    try {
+      const users = await usersAPI.searchUsers(query);
+      return users.map((user: any) => ({
+        id: user._id,
+        name: user.name,
+        username: user.username,
+        email: user.email || '',
+        profilePic: user.profilePic || '',
+        bio: user.bio || '',
+        followers: 0,
+        following: 0,
+        posts: 0
+      }));
+    } catch (error) {
+      console.error('Error searching users:', error);
+      return [];
+    }
   };
 
   const logout = () => {
@@ -252,6 +213,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     localStorage.removeItem('socialee_user');
     setUser(null);
     setFollowingUsers([]);
+    setRegisteredUsers([]);
+    toast.success('Logged out successfully!');
   };
 
   const value = {
@@ -268,6 +231,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     updateProfilePicture,
     updatePassword,
     isAuthenticated: !!user,
+    searchUsers,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
