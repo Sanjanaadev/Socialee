@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 
 // Signup route
 router.post('/signup', async (req, res) => {
@@ -12,6 +13,14 @@ router.post('/signup', async (req, res) => {
       username: req.body.username, 
       email: req.body.email 
     });
+    
+    // Check if MongoDB is connected
+    if (mongoose.connection.readyState !== 1) {
+      console.error('❌ MongoDB not connected. Connection state:', mongoose.connection.readyState);
+      return res.status(500).json({ 
+        error: 'Database connection error. Please try again later.' 
+      });
+    }
     
     const { name, username, email, password } = req.body;
 
@@ -41,6 +50,7 @@ router.post('/signup', async (req, res) => {
     }
 
     // Check if user already exists
+    console.log('🔍 Checking for existing user...');
     const existingUser = await User.findOne({ 
       $or: [{ email: email.toLowerCase() }, { username: username.toLowerCase() }] 
     });
@@ -53,18 +63,32 @@ router.post('/signup', async (req, res) => {
     }
 
     // Hash password
+    console.log('🔐 Hashing password...');
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create new user
-    const newUser = new User({
+    // Create new user object
+    console.log('👤 Creating new user object...');
+    const userData = {
       name: name.trim(),
       username: username.trim().toLowerCase(),
       email: email.trim().toLowerCase(),
       password: hashedPassword
-    });
+    };
 
+    // Create and save user
     console.log('💾 Saving user to MongoDB...');
+    const newUser = new User(userData);
+    
+    // Validate before saving
+    const validationError = newUser.validateSync();
+    if (validationError) {
+      console.error('❌ Validation error:', validationError);
+      return res.status(400).json({ 
+        error: 'Validation failed: ' + Object.values(validationError.errors).map(e => e.message).join(', ')
+      });
+    }
+    
     const savedUser = await newUser.save();
     console.log('✅ User saved successfully:', savedUser._id);
 
@@ -76,6 +100,7 @@ router.post('/signup', async (req, res) => {
     );
 
     res.status(201).json({
+      message: 'User created successfully',
       token,
       user: {
         id: savedUser._id,
@@ -103,6 +128,11 @@ router.post('/signup', async (req, res) => {
       return res.status(400).json({ error: `${field} already exists` });
     }
     
+    // Handle MongoDB connection errors
+    if (err.name === 'MongoNetworkError' || err.name === 'MongooseServerSelectionError') {
+      return res.status(500).json({ error: 'Database connection error. Please try again later.' });
+    }
+    
     res.status(500).json({ error: 'Error signing up: ' + err.message });
   }
 });
@@ -111,6 +141,14 @@ router.post('/signup', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     console.log('🔐 Login attempt:', { username: req.body.username });
+    
+    // Check if MongoDB is connected
+    if (mongoose.connection.readyState !== 1) {
+      console.error('❌ MongoDB not connected. Connection state:', mongoose.connection.readyState);
+      return res.status(500).json({ 
+        error: 'Database connection error. Please try again later.' 
+      });
+    }
     
     const { username, password } = req.body;
 
@@ -164,6 +202,12 @@ router.post('/login', async (req, res) => {
     });
   } catch (err) {
     console.error('❌ Login error:', err);
+    
+    // Handle MongoDB connection errors
+    if (err.name === 'MongoNetworkError' || err.name === 'MongooseServerSelectionError') {
+      return res.status(500).json({ error: 'Database connection error. Please try again later.' });
+    }
+    
     res.status(500).json({ error: 'Error logging in: ' + err.message });
   }
 });

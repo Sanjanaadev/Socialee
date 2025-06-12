@@ -7,7 +7,8 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "setup": "node setup-database.js",
-    "test-db": "node test-db.js"
+    "test-db": "node test-db.js",
+    "check-mongo": "node -e \"const mongoose = require('mongoose'); mongoose.connect('mongodb://localhost:27017/socialee').then(() => { console.log('MongoDB is running!'); process.exit(0); }).catch(err => { console.error('MongoDB is not running:', err.message); process.exit(1); });\""
   },
   "dependencies": {
     "express": "^4.18.2",
