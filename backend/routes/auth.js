@@ -67,8 +67,8 @@ router.post('/signup', async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create new user object
-    console.log('👤 Creating new user object...');
+    // Create user data object
+    console.log('👤 Creating user data object...');
     const userData = {
       name: name.trim(),
       username: username.trim().toLowerCase(),
@@ -76,20 +76,9 @@ router.post('/signup', async (req, res) => {
       password: hashedPassword
     };
 
-    // Create and save user
+    // Create and save user using User.create() instead of new User()
     console.log('💾 Saving user to MongoDB...');
-    const newUser = new User(userData);
-    
-    // Validate before saving
-    const validationError = newUser.validateSync();
-    if (validationError) {
-      console.error('❌ Validation error:', validationError);
-      return res.status(400).json({ 
-        error: 'Validation failed: ' + Object.values(validationError.errors).map(e => e.message).join(', ')
-      });
-    }
-    
-    const savedUser = await newUser.save();
+    const savedUser = await User.create(userData);
     console.log('✅ User saved successfully:', savedUser._id);
 
     // Generate JWT token
