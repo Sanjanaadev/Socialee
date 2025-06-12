@@ -1,5 +1,4 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/auth');
@@ -32,7 +31,9 @@ app.get('/', (req, res) => {
 // Health check route with detailed database info
 app.get('/api/health', async (req, res) => {
   try {
-    // Check database connection and collections
+    const mongoose = require('mongoose');
+    
+    // Check database connection
     const dbState = mongoose.connection.readyState;
     const dbName = mongoose.connection.name;
     const dbHost = mongoose.connection.host;
@@ -95,7 +96,7 @@ app.get('/api/debug/data', async (req, res) => {
 // Connect to MongoDB and start server
 const startServer = async () => {
   try {
-    // Connect to MongoDB Compass
+    // Connect to MongoDB
     await connectDB();
     
     // Start the server
@@ -104,7 +105,7 @@ const startServer = async () => {
       console.log(`🌐 Frontend should connect to: http://localhost:${PORT}/api`);
       console.log(`🔍 Health check: http://localhost:${PORT}/api/health`);
       console.log(`🐛 Debug data: http://localhost:${PORT}/api/debug/data`);
-      console.log(`📊 MongoDB Compass: Check your 'socialee' database for stored data`);
+      console.log(`📊 MongoDB: Check your 'socialee' database for stored data`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

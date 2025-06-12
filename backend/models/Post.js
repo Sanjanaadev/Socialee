@@ -1,47 +1,74 @@
-// Simple post model for file-based database
-class Post {
-  static async find(query = {}) {
-    return await global.db.findPosts(query);
-  }
+const mongoose = require('mongoose');
 
-  static async findById(id) {
-    return await global.db.findPostById(id);
+const commentSchema = new mongoose.Schema({
+  text: {
+    type: String,
+    required: true,
+    trim: true,
+    maxlength: 500
+  },
+  author: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
   }
+}, {
+  timestamps: true
+});
 
-  static async create(postData) {
-    return await global.db.createPost(postData);
+const postSchema = new mongoose.Schema({
+  imageUrl: {
+    type: String,
+    required: true
+  },
+  caption: {
+    type: String,
+    required: true,
+    trim: true,
+    maxlength: 500
+  },
+  author: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  likes: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  comments: [commentSchema],
+  tags: [{
+    type: String,
+    trim: true
+  }],
+  location: {
+    type: String,
+    trim: true
+  },
+  isArchived: {
+    type: Boolean,
+    default: false
   }
+}, {
+  timestamps: true
+});
 
-  static async findByIdAndUpdate(id, updates, options = {}) {
-    const post = await global.db.updatePost(id, updates);
-    return post;
-  }
+// Index for better query performance
+postSchema.index({ author: 1, createdAt: -1 });
+postSchema.index({ createdAt: -1 });
+postSchema.index({ tags: 1 });
 
-  static async findByIdAndDelete(id) {
-    return await global.db.deletePost(id);
-  }
+// Virtual for likes count
+postSchema.virtual('likesCount').get(function() {
+  return this.likes.length;
+});
 
-  // Helper method to validate post data
-  static validate(postData) {
-    const errors = [];
-    
-    if (!postData.content || postData.content.trim().length === 0) {
-      errors.push('Post content is required');
-    }
-    
-    if (!postData.author) {
-      errors.push('Post author is required');
-    }
-    
-    if (postData.type && !['text', 'image', 'mood'].includes(postData.type)) {
-      errors.push('Invalid post type');
-    }
-    
-    return {
-      isValid: errors.length === 0,
-      errors
-    };
-  }
-}
+// Virtual for comments count
+postSchema.virtual('commentsCount').get(function() {
+  return this.comments.length;
+});
 
-module.exports = Post;
+// Ensure virtual fields are serialized
+postSchema.set('toJSON', { virtuals: true });
+
+module.exports = mongoose.model('Post', postSchema);

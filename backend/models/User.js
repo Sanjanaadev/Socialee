@@ -1,48 +1,75 @@
-// Simple user model for file-based database
-class User {
-  static async findOne(query) {
-    return await global.db.findUser(query);
-  }
+const mongoose = require('mongoose');
 
-  static async findById(id) {
-    return await global.db.findUserById(id);
+const userSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+    trim: true,
+    minlength: 2,
+    maxlength: 50
+  },
+  username: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true,
+    lowercase: true,
+    minlength: 3,
+    maxlength: 20,
+    match: /^[a-zA-Z0-9_]+$/
+  },
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true,
+    lowercase: true,
+    match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  },
+  password: {
+    type: String,
+    required: true,
+    minlength: 6
+  },
+  profilePic: {
+    type: String,
+    default: ''
+  },
+  bio: {
+    type: String,
+    default: '',
+    maxlength: 150
+  },
+  followers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  following: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  isVerified: {
+    type: Boolean,
+    default: false
   }
+}, {
+  timestamps: true
+});
 
-  static async create(userData) {
-    return await global.db.createUser(userData);
-  }
+// Index for better search performance
+userSchema.index({ username: 1 });
+userSchema.index({ email: 1 });
+userSchema.index({ name: 'text', username: 'text' });
 
-  static async findByIdAndUpdate(id, updates, options = {}) {
-    const user = await global.db.updateUser(id, updates);
-    return user;
-  }
+// Virtual for posts count
+userSchema.virtual('postsCount', {
+  ref: 'Post',
+  localField: '_id',
+  foreignField: 'author',
+  count: true
+});
 
-  // Helper method to validate user data
-  static validate(userData) {
-    const errors = [];
-    
-    if (!userData.username || userData.username.length < 3) {
-      errors.push('Username must be at least 3 characters long');
-    }
-    
-    if (!userData.email || !this.isValidEmail(userData.email)) {
-      errors.push('Valid email is required');
-    }
-    
-    if (!userData.password || userData.password.length < 6) {
-      errors.push('Password must be at least 6 characters long');
-    }
-    
-    return {
-      isValid: errors.length === 0,
-      errors
-    };
-  }
+// Ensure virtual fields are serialized
+userSchema.set('toJSON', { virtuals: true });
 
-  static isValidEmail(email) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  }
-}
-
-module.exports = User;
+module.exports = mongoose.model('User', userSchema);

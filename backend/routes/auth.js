@@ -4,7 +4,7 @@ const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-// Signup route with better logging
+// Signup route
 router.post('/signup', async (req, res) => {
   try {
     console.log('📝 Signup attempt:', { 
@@ -23,9 +23,26 @@ router.post('/signup', async (req, res) => {
       });
     }
 
+    // Additional validation
+    if (name.trim().length < 2) {
+      return res.status(400).json({ error: 'Name must be at least 2 characters long' });
+    }
+
+    if (username.length < 3 || username.length > 20) {
+      return res.status(400).json({ error: 'Username must be between 3 and 20 characters' });
+    }
+
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      return res.status(400).json({ error: 'Username can only contain letters, numbers, and underscores' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
     // Check if user already exists
     const existingUser = await User.findOne({ 
-      $or: [{ email }, { username }] 
+      $or: [{ email: email.toLowerCase() }, { username: username.toLowerCase() }] 
     });
 
     if (existingUser) {
@@ -41,13 +58,13 @@ router.post('/signup', async (req, res) => {
 
     // Create new user
     const newUser = new User({
-      name,
-      username,
-      email,
+      name: name.trim(),
+      username: username.trim().toLowerCase(),
+      email: email.trim().toLowerCase(),
       password: hashedPassword
     });
 
-    console.log('💾 Saving user to database...');
+    console.log('💾 Saving user to MongoDB...');
     const savedUser = await newUser.save();
     console.log('✅ User saved successfully:', savedUser._id);
 
@@ -65,16 +82,32 @@ router.post('/signup', async (req, res) => {
         name: savedUser.name,
         username: savedUser.username,
         email: savedUser.email,
-        profilePic: savedUser.profilePic
+        profilePic: savedUser.profilePic,
+        bio: savedUser.bio,
+        followers: savedUser.followers,
+        following: savedUser.following
       }
     });
   } catch (err) {
     console.error('❌ Signup error:', err);
+    
+    // Handle MongoDB validation errors
+    if (err.name === 'ValidationError') {
+      const errors = Object.values(err.errors).map(e => e.message);
+      return res.status(400).json({ error: errors.join(', ') });
+    }
+    
+    // Handle duplicate key errors
+    if (err.code === 11000) {
+      const field = Object.keys(err.keyPattern)[0];
+      return res.status(400).json({ error: `${field} already exists` });
+    }
+    
     res.status(500).json({ error: 'Error signing up: ' + err.message });
   }
 });
 
-// Login route with better logging
+// Login route
 router.post('/login', async (req, res) => {
   try {
     console.log('🔐 Login attempt:', { username: req.body.username });
@@ -85,8 +118,14 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    // Find user
-    const user = await User.findOne({ username });
+    // Find user by username or email
+    const user = await User.findOne({ 
+      $or: [
+        { username: username.toLowerCase() }, 
+        { email: username.toLowerCase() }
+      ] 
+    });
+
     if (!user) {
       console.log('❌ User not found:', username);
       return res.status(400).json({ error: 'Invalid credentials' });
@@ -117,7 +156,10 @@ router.post('/login', async (req, res) => {
         name: user.name,
         username: user.username,
         email: user.email,
-        profilePic: user.profilePic
+        profilePic: user.profilePic,
+        bio: user.bio,
+        followers: user.followers,
+        following: user.following
       }
     });
   } catch (err) {
