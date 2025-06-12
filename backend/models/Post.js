@@ -1,48 +1,47 @@
-const mongoose = require('mongoose');
-
-const commentSchema = new mongoose.Schema({
-  text: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  author: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
+// Simple post model for file-based database
+class Post {
+  static async find(query = {}) {
+    return await global.db.findPosts(query);
   }
-});
 
-const postSchema = new mongoose.Schema({
-  imageUrl: {
-    type: String,
-    required: true
-  },
-  caption: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  author: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  likes: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  }],
-  comments: [commentSchema],
-  createdAt: {
-    type: Date,
-    default: Date.now
+  static async findById(id) {
+    return await global.db.findPostById(id);
   }
-}, { 
-  timestamps: true 
-});
 
-module.exports = mongoose.model('Post', postSchema);
+  static async create(postData) {
+    return await global.db.createPost(postData);
+  }
+
+  static async findByIdAndUpdate(id, updates, options = {}) {
+    const post = await global.db.updatePost(id, updates);
+    return post;
+  }
+
+  static async findByIdAndDelete(id) {
+    return await global.db.deletePost(id);
+  }
+
+  // Helper method to validate post data
+  static validate(postData) {
+    const errors = [];
+    
+    if (!postData.content || postData.content.trim().length === 0) {
+      errors.push('Post content is required');
+    }
+    
+    if (!postData.author) {
+      errors.push('Post author is required');
+    }
+    
+    if (postData.type && !['text', 'image', 'mood'].includes(postData.type)) {
+      errors.push('Invalid post type');
+    }
+    
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  }
+}
+
+module.exports = Post;

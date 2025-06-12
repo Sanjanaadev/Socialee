@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const connectDB = require('./config/db');
 const authRoutes = require('./routes/auth');
 const postsRoutes = require('./routes/posts');
 const usersRoutes = require('./routes/users');
@@ -91,62 +92,25 @@ app.get('/api/debug/data', async (req, res) => {
   }
 });
 
-// MongoDB connection with better error handling and debugging
-const connectDB = async () => {
+// Connect to MongoDB and start server
+const startServer = async () => {
   try {
-    console.log('🔄 Attempting to connect to MongoDB...');
-    console.log('📍 Connection string:', process.env.MONGO_URI || 'mongodb://localhost:27017/socialee');
+    // Connect to MongoDB Compass
+    await connectDB();
     
-    const conn = await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/socialee', {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+    // Start the server
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running at http://localhost:${PORT}`);
+      console.log(`🌐 Frontend should connect to: http://localhost:${PORT}/api`);
+      console.log(`🔍 Health check: http://localhost:${PORT}/api/health`);
+      console.log(`🐛 Debug data: http://localhost:${PORT}/api/debug/data`);
+      console.log(`📊 MongoDB Compass: Check your 'socialee' database for stored data`);
     });
-    
-    console.log(`✅ Connected to MongoDB: ${conn.connection.host}`);
-    console.log(`📊 Database: ${conn.connection.name}`);
-    console.log(`🔗 Connection state: ${conn.connection.readyState}`);
-    
-    // List existing collections
-    try {
-      const collections = await conn.connection.db.listCollections().toArray();
-      console.log('📁 Available collections:', collections.map(c => c.name));
-    } catch (err) {
-      console.log('⚠️  Could not list collections:', err.message);
-    }
-    
-  } catch (err) {
-    console.error('❌ MongoDB connection error:', err.message);
-    console.error('🔍 Full error:', err);
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
     process.exit(1);
   }
 };
 
-// Handle MongoDB connection events
-mongoose.connection.on('connected', () => {
-  console.log('🔗 Mongoose connected to MongoDB');
-});
-
-mongoose.connection.on('error', (err) => {
-  console.error('❌ Mongoose connection error:', err);
-});
-
-mongoose.connection.on('disconnected', () => {
-  console.log('🔌 Mongoose disconnected');
-});
-
-// Graceful shutdown
-process.on('SIGINT', async () => {
-  await mongoose.connection.close();
-  console.log('🛑 MongoDB connection closed through app termination');
-  process.exit(0);
-});
-
-// Connect to MongoDB and start server
-connectDB().then(() => {
-  app.listen(PORT, () => {
-    console.log(`🚀 Server running at http://localhost:${PORT}`);
-    console.log(`🌐 Frontend should connect to: http://localhost:${PORT}/api`);
-    console.log(`🔍 Health check: http://localhost:${PORT}/api/health`);
-    console.log(`🐛 Debug data: http://localhost:${PORT}/api/debug/data`);
-  });
-});
+// Start the application
+startServer();

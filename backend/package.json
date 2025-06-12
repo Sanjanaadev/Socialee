@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "setup": "node setup-database.js"
+    "setup": "node setup-database.js",
+    "test-db": "node test-db.js"
   },
   "dependencies": {
     "express": "^4.18.2",
