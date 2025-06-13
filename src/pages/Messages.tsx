@@ -1,14 +1,34 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, MessageSquare } from 'lucide-react';
+import { Search, MessageSquare, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { messagesAPI } from '../services/api';
-import { Conversation } from '../types';
 import { formatDistanceToNow } from 'date-fns';
 
+interface ConversationData {
+  conversationId: string;
+  otherParticipant: {
+    _id: string;
+    id: string;
+    name: string;
+    username: string;
+    profilePic?: string;
+  };
+  lastMessage: {
+    _id: string;
+    text: string;
+    sender: {
+      _id: string;
+      name: string;
+    };
+    createdAt: string;
+  };
+  unreadCount: number;
+}
+
 const Messages = () => {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversations, setConversations] = useState<ConversationData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const { user } = useAuth();
@@ -20,6 +40,7 @@ const Messages = () => {
   const loadConversations = async () => {
     try {
       const conversationsData = await messagesAPI.getConversations();
+      console.log('Loaded conversations:', conversationsData);
       setConversations(conversationsData);
     } catch (error) {
       console.error('Error loading conversations:', error);
@@ -101,7 +122,7 @@ const Messages = () => {
               transition={{ duration: 0.2, delay: index * 0.05 }}
             >
               <Link 
-                to={`/messages/${conversation.otherParticipant.id}`}
+                to={`/messages/${conversation.otherParticipant._id || conversation.otherParticipant.id}`}
                 className="block card p-4 hover:bg-background-light transition-colors"
               >
                 <div className="flex items-center">
@@ -114,9 +135,7 @@ const Messages = () => {
                           className="h-full w-full object-cover"
                         />
                       ) : (
-                        <span className="font-medium">
-                          {conversation.otherParticipant.name.charAt(0).toUpperCase()}
-                        </span>
+                        <User size={24} className="text-text-secondary" />
                       )}
                     </div>
                     {conversation.unreadCount > 0 && (
@@ -133,7 +152,7 @@ const Messages = () => {
                       </span>
                     </div>
                     <p className="text-sm text-text-secondary truncate mt-1">
-                      {conversation.lastMessage.sender.id === user?.id ? 'You: ' : ''}
+                      {conversation.lastMessage.sender._id === user?.id ? 'You: ' : ''}
                       {conversation.lastMessage.text}
                     </p>
                   </div>

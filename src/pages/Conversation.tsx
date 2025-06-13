@@ -112,9 +112,11 @@ const Conversation = () => {
       
       setMessages(prev => [...prev, formattedMessage]);
       setNewMessage('');
+      toast.success('Message sent!');
     } catch (error: any) {
       console.error('Error sending message:', error);
-      toast.error('Failed to send message');
+      const errorMessage = error.response?.data?.error || 'Failed to send message';
+      toast.error(errorMessage);
     } finally {
       setIsSending(false);
     }

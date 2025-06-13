@@ -125,6 +125,7 @@ const Home = () => {
         )
       );
     } catch (error: any) {
+      console.error('Save post error:', error);
       const errorMessage = error.response?.data?.error || 'Failed to save post';
       toast.error(errorMessage);
     }
