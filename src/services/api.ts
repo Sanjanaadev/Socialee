@@ -114,6 +114,57 @@ export const usersAPI = {
   },
 };
 
+// Messages API calls
+export const messagesAPI = {
+  sendMessage: async (receiverId: string, text: string) => {
+    const response = await api.post('/messages/send', { receiverId, text });
+    return response.data;
+  },
+
+  getConversation: async (userId: string) => {
+    const response = await api.get(`/messages/conversation/${userId}`);
+    return response.data;
+  },
+
+  getConversations: async () => {
+    const response = await api.get('/messages/conversations');
+    return response.data;
+  },
+
+  markConversationAsRead: async (userId: string) => {
+    const response = await api.put(`/messages/conversation/${userId}/read`);
+    return response.data;
+  },
+
+  deleteMessage: async (messageId: string) => {
+    const response = await api.delete(`/messages/${messageId}`);
+    return response.data;
+  },
+};
+
+// Saved Posts API calls
+export const savedPostsAPI = {
+  savePost: async (postId: string) => {
+    const response = await api.post(`/saved-posts/${postId}/save`);
+    return response.data;
+  },
+
+  unsavePost: async (postId: string) => {
+    const response = await api.delete(`/saved-posts/${postId}/save`);
+    return response.data;
+  },
+
+  getSavedPosts: async () => {
+    const response = await api.get('/saved-posts/saved');
+    return response.data;
+  },
+
+  checkIfSaved: async (postId: string) => {
+    const response = await api.get(`/saved-posts/${postId}/saved`);
+    return response.data;
+  },
+};
+
 // Health check
 export const healthAPI = {
   check: async () => {

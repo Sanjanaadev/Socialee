@@ -27,6 +27,7 @@ export interface Post {
   createdAt: string;
   height?: number;
   isLiked?: boolean;
+  isSaved?: boolean;
 }
 
 export interface Snap {
@@ -52,11 +53,12 @@ export interface Message {
   text: string;
   createdAt: string;
   read: boolean;
+  conversationId?: string;
 }
 
 export interface Conversation {
-  id: string;
-  participants: User[];
+  conversationId: string;
+  otherParticipant: User;
   lastMessage: Message;
   unreadCount: number;
 }

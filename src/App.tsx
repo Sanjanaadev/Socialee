@@ -38,7 +38,7 @@ function App() {
             <Route path="snaps" element={<Snaps />} />
             <Route path="moods" element={<Moods />} />
             <Route path="messages" element={<Messages />} />
-            <Route path="messages/:conversationId" element={<Conversation />} />
+            <Route path="messages/:userId" element={<Conversation />} />
             <Route path="profile/:userId" element={<Profile />} />
             <Route path="profile" element={<Profile />} />
             <Route path="edit-profile" element={<EditProfile />} />

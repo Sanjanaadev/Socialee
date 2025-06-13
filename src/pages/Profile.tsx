@@ -4,7 +4,7 @@ import { User, Post } from '../types';
 import { MessageSquare, UserPlus, Camera, Settings, UserCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { usersAPI, postsAPI } from '../services/api';
+import { usersAPI, postsAPI, savedPostsAPI } from '../services/api';
 import { toast } from 'react-hot-toast';
 
 const Profile = () => {
@@ -12,6 +12,7 @@ const Profile = () => {
   const { user: currentUser, followUser, unfollowUser, isFollowing, followingUsers } = useAuth();
   const [profileUser, setProfileUser] = useState<User | null>(null);
   const [userPosts, setUserPosts] = useState<Post[]>([]);
+  const [savedPosts, setSavedPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('posts');
   const [showFollowingModal, setShowFollowingModal] = useState(false);
@@ -64,6 +65,35 @@ const Profile = () => {
       // Update posts count
       setProfileUser(prev => prev ? { ...prev, posts: formattedPosts.length } : null);
 
+      // Load saved posts if viewing own profile
+      if (isCurrentUser) {
+        try {
+          const savedPostsData = await savedPostsAPI.getSavedPosts();
+          setSavedPosts(savedPostsData.map((post: any) => ({
+            id: post._id,
+            imageUrl: post.imageUrl,
+            caption: post.caption,
+            author: {
+              id: post.author._id,
+              name: post.author.name,
+              username: post.author.username,
+              email: post.author.email || '',
+              profilePic: post.author.profilePic || '',
+              bio: post.author.bio || '',
+              followers: 0,
+              following: 0,
+              posts: 0
+            },
+            likes: post.likes?.length || 0,
+            comments: post.comments || [],
+            createdAt: new Date(post.createdAt).toLocaleDateString(),
+            height: 350
+          })));
+        } catch (error) {
+          console.error('Error loading saved posts:', error);
+        }
+      }
+
     } catch (error: any) {
       console.error('Error loading profile:', error);
       toast.error('Failed to load profile');
@@ -95,6 +125,11 @@ const Profile = () => {
     } catch (error) {
       // Error handling is done in the auth context
     }
+  };
+
+  const handleMessage = () => {
+    if (!profileUser || isCurrentUser) return;
+    navigate(`/messages/${profileUser.id}`);
   };
 
   const handleFollowingClick = () => {
@@ -224,10 +259,13 @@ const Profile = () => {
                     </>
                   )}
                 </button>
-                <Link to={`/messages`} className="btn-outline flex items-center gap-2">
+                <button 
+                  className="btn-outline flex items-center gap-2"
+                  onClick={handleMessage}
+                >
                   <MessageSquare size={18} />
                   <span>Message</span>
-                </Link>
+                </button>
               </>
             )}
           </div>
@@ -243,12 +281,14 @@ const Profile = () => {
           >
             Posts
           </button>
-          <button 
-            className={`pb-3 px-2 ${activeTab === 'saved' ? 'border-b-2 border-accent-pink font-medium' : 'text-text-secondary'}`}
-            onClick={() => setActiveTab('saved')}
-          >
-            Saved
-          </button>
+          {isCurrentUser && (
+            <button 
+              className={`pb-3 px-2 ${activeTab === 'saved' ? 'border-b-2 border-accent-pink font-medium' : 'text-text-secondary'}`}
+              onClick={() => setActiveTab('saved')}
+            >
+              Saved
+            </button>
+          )}
         </nav>
       </div>
       
@@ -291,9 +331,30 @@ const Profile = () => {
           </div>
         )
       ) : (
-        <div className="text-center py-10 text-text-secondary">
-          No saved posts
-        </div>
+        savedPosts.length === 0 ? (
+          <div className="text-center py-10 text-text-secondary">
+            <h3 className="text-lg font-medium mb-2">No saved posts</h3>
+            <p>Posts you save will appear here.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {savedPosts.map((post, index) => (
+              <motion.div
+                key={post.id}
+                className="aspect-square rounded-lg overflow-hidden"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3, delay: index * 0.1 }}
+              >
+                <img 
+                  src={post.imageUrl} 
+                  alt={post.caption} 
+                  className="h-full w-full object-cover hover:scale-105 transition-transform duration-300"
+                />
+              </motion.div>
+            ))}
+          </div>
+        )
       )}
 
       {/* Following Modal */}

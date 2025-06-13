@@ -1,47 +1,38 @@
 import { useState, useEffect } from 'react';
-import { conversations } from '../data/mockData';
-import { Conversation } from '../types';
 import { Link } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { Search, MessageSquare } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { messagesAPI } from '../services/api';
+import { Conversation } from '../types';
+import { formatDistanceToNow } from 'date-fns';
 
 const Messages = () => {
-  const [userConversations, setUserConversations] = useState<Conversation[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const { followingUsers, registeredUsers, user } = useAuth();
+  const { user } = useAuth();
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      // Filter conversations to show only with followed users and registered users
-      const followedUserIds = followingUsers.map(u => u.id);
-      const registeredUserIds = registeredUsers.map(u => u.id);
-      
-      const personalizedConversations = conversations.filter(conversation => {
-        const otherParticipant = conversation.participants.find(p => p.id !== user?.id);
-        if (!otherParticipant) return false;
-        
-        const isFollowedUser = followedUserIds.includes(otherParticipant.id);
-        const isRegisteredUser = registeredUserIds.includes(otherParticipant.id);
-        
-        return isFollowedUser && isRegisteredUser;
-      });
+    loadConversations();
+  }, []);
 
-      setUserConversations(personalizedConversations);
+  const loadConversations = async () => {
+    try {
+      const conversationsData = await messagesAPI.getConversations();
+      setConversations(conversationsData);
+    } catch (error) {
+      console.error('Error loading conversations:', error);
+    } finally {
       setIsLoading(false);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [followingUsers, registeredUsers, user]);
+    }
+  };
 
   // Filter conversations based on search query
   const filteredConversations = searchQuery.trim() === ''
-    ? userConversations
-    : userConversations.filter(conversation => {
-        const otherParticipant = conversation.participants.find(p => p.id !== user?.id);
-        if (!otherParticipant) return false;
-        
+    ? conversations
+    : conversations.filter(conversation => {
+        const otherParticipant = conversation.otherParticipant;
         return otherParticipant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                otherParticipant.username.toLowerCase().includes(searchQuery.toLowerCase());
       });
@@ -59,7 +50,7 @@ const Messages = () => {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Messages</h1>
         <p className="text-text-secondary text-sm">
-          Chat with people you follow
+          Your conversations
         </p>
       </div>
       
@@ -90,9 +81,10 @@ const Messages = () => {
               </div>
             ) : (
               <div>
+                <MessageSquare size={64} className="mx-auto mb-4 text-text-muted" />
                 <h2 className="text-xl font-bold mb-4">No Messages Yet</h2>
                 <p className="mb-6">
-                  Start conversations with people you follow. Follow other users to see them here!
+                  Start conversations by visiting someone's profile and clicking the message button.
                 </p>
                 <Link to="/home" className="btn-primary">
                   Discover People
@@ -101,49 +93,54 @@ const Messages = () => {
             )}
           </div>
         ) : (
-          filteredConversations.map((conversation, index) => {
-            // Get the other participant (not the current user)
-            const otherParticipant = conversation.participants.find(p => p.id !== user?.id);
-            if (!otherParticipant) return null;
-            
-            return (
-              <motion.div
-                key={conversation.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2, delay: index * 0.05 }}
+          filteredConversations.map((conversation, index) => (
+            <motion.div
+              key={conversation.conversationId}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2, delay: index * 0.05 }}
+            >
+              <Link 
+                to={`/messages/${conversation.otherParticipant.id}`}
+                className="block card p-4 hover:bg-background-light transition-colors"
               >
-                <Link 
-                  to={`/messages/${conversation.id}`}
-                  className="block card p-4 hover:bg-background-light transition-colors"
-                >
-                  <div className="flex items-center">
-                    <div className="relative">
-                      <img 
-                        src={otherParticipant.profilePic} 
-                        alt={otherParticipant.name} 
-                        className="h-12 w-12 rounded-full object-cover"
-                      />
-                      {conversation.unreadCount > 0 && (
-                        <div className="absolute -top-1 -right-1 h-5 w-5 bg-accent-pink rounded-full flex items-center justify-center">
-                          <span className="text-xs text-white">{conversation.unreadCount}</span>
-                        </div>
+                <div className="flex items-center">
+                  <div className="relative">
+                    <div className="h-12 w-12 rounded-full overflow-hidden bg-background-light flex items-center justify-center">
+                      {conversation.otherParticipant.profilePic ? (
+                        <img 
+                          src={conversation.otherParticipant.profilePic} 
+                          alt={conversation.otherParticipant.name} 
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="font-medium">
+                          {conversation.otherParticipant.name.charAt(0).toUpperCase()}
+                        </span>
                       )}
                     </div>
-                    <div className="ml-3 flex-1">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-medium">{otherParticipant.name}</h3>
-                        <span className="text-xs text-text-muted">{conversation.lastMessage.createdAt}</span>
+                    {conversation.unreadCount > 0 && (
+                      <div className="absolute -top-1 -right-1 h-5 w-5 bg-accent-pink rounded-full flex items-center justify-center">
+                        <span className="text-xs text-white">{conversation.unreadCount}</span>
                       </div>
-                      <p className="text-sm text-text-secondary truncate mt-1">
-                        {conversation.lastMessage.text}
-                      </p>
-                    </div>
+                    )}
                   </div>
-                </Link>
-              </motion.div>
-            );
-          })
+                  <div className="ml-3 flex-1">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-medium">{conversation.otherParticipant.name}</h3>
+                      <span className="text-xs text-text-muted">
+                        {formatDistanceToNow(new Date(conversation.lastMessage.createdAt), { addSuffix: true })}
+                      </span>
+                    </div>
+                    <p className="text-sm text-text-secondary truncate mt-1">
+                      {conversation.lastMessage.sender.id === user?.id ? 'You: ' : ''}
+                      {conversation.lastMessage.text}
+                    </p>
+                  </div>
+                </div>
+              </Link>
+            </motion.div>
+          ))
         )}
       </div>
     </div>

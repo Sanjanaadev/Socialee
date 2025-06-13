@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Heart, MessageCircle, Send } from 'lucide-react';
+import { Heart, MessageCircle, Send, Bookmark, BookmarkCheck } from 'lucide-react';
 import { Post, Comment } from '../types';
 import Masonry from 'react-masonry-css';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { postsAPI } from '../services/api';
+import { postsAPI, savedPostsAPI } from '../services/api';
 import { toast } from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -22,41 +22,53 @@ const Home = () => {
   const loadFeedPosts = async () => {
     try {
       const posts = await postsAPI.getFeedPosts();
-      const formattedPosts = posts.map((post: any) => ({
-        id: post._id,
-        imageUrl: post.imageUrl,
-        caption: post.caption,
-        author: {
-          id: post.author._id,
-          name: post.author.name,
-          username: post.author.username,
-          email: post.author.email || '',
-          profilePic: post.author.profilePic || '',
-          bio: post.author.bio || '',
-          followers: 0,
-          following: 0,
-          posts: 0
-        },
-        likes: post.likes?.length || 0,
-        comments: post.comments?.map((comment: any) => ({
-          id: comment._id,
-          text: comment.text,
+      const formattedPosts = await Promise.all(posts.map(async (post: any) => {
+        // Check if post is saved
+        let isSaved = false;
+        try {
+          const savedStatus = await savedPostsAPI.checkIfSaved(post._id);
+          isSaved = savedStatus.saved;
+        } catch (error) {
+          console.error('Error checking saved status:', error);
+        }
+
+        return {
+          id: post._id,
+          imageUrl: post.imageUrl,
+          caption: post.caption,
           author: {
-            id: comment.author._id,
-            name: comment.author.name,
-            username: comment.author.username,
-            email: comment.author.email || '',
-            profilePic: comment.author.profilePic || '',
-            bio: comment.author.bio || '',
+            id: post.author._id,
+            name: post.author.name,
+            username: post.author.username,
+            email: post.author.email || '',
+            profilePic: post.author.profilePic || '',
+            bio: post.author.bio || '',
             followers: 0,
             following: 0,
             posts: 0
           },
-          createdAt: formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })
-        })) || [],
-        createdAt: formatDistanceToNow(new Date(post.createdAt), { addSuffix: true }),
-        height: 350,
-        isLiked: post.likes?.includes(user?.id) || false
+          likes: post.likes?.length || 0,
+          comments: post.comments?.map((comment: any) => ({
+            id: comment._id,
+            text: comment.text,
+            author: {
+              id: comment.author._id,
+              name: comment.author.name,
+              username: comment.author.username,
+              email: comment.author.email || '',
+              profilePic: comment.author.profilePic || '',
+              bio: comment.author.bio || '',
+              followers: 0,
+              following: 0,
+              posts: 0
+            },
+            createdAt: formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })
+          })) || [],
+          createdAt: formatDistanceToNow(new Date(post.createdAt), { addSuffix: true }),
+          height: 350,
+          isLiked: post.likes?.includes(user?.id) || false,
+          isSaved
+        };
       }));
       
       setFeedPosts(formattedPosts);
@@ -89,6 +101,32 @@ const Home = () => {
       );
     } catch (error: any) {
       toast.error('Failed to like post');
+    }
+  };
+
+  const handleSave = async (postId: string) => {
+    try {
+      const post = feedPosts.find(p => p.id === postId);
+      if (!post) return;
+
+      if (post.isSaved) {
+        await savedPostsAPI.unsavePost(postId);
+        toast.success('Post removed from saved');
+      } else {
+        await savedPostsAPI.savePost(postId);
+        toast.success('Post saved successfully');
+      }
+
+      setFeedPosts(prevPosts =>
+        prevPosts.map(p =>
+          p.id === postId
+            ? { ...p, isSaved: !p.isSaved }
+            : p
+        )
+      );
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || 'Failed to save post';
+      toast.error(errorMessage);
     }
   };
 
@@ -221,16 +259,24 @@ const Home = () => {
               
               {/* Actions */}
               <div className="flex justify-between text-text-muted mb-4">
-                <button 
-                  className={`flex items-center space-x-1 transition-colors ${post.isLiked ? 'text-accent-pink' : 'hover:text-accent-pink'}`}
-                  onClick={() => handleLike(post.id)}
-                >
-                  <Heart size={20} fill={post.isLiked ? 'currentColor' : 'none'} />
-                  <span>{post.likes}</span>
-                </button>
-                <div className="flex items-center space-x-1">
-                  <MessageCircle size={20} />
-                  <span>{post.comments?.length || 0}</span>
+                <div className="flex items-center gap-4">
+                  <button 
+                    className={`flex items-center space-x-1 transition-colors ${post.isLiked ? 'text-accent-pink' : 'hover:text-accent-pink'}`}
+                    onClick={() => handleLike(post.id)}
+                  >
+                    <Heart size={20} fill={post.isLiked ? 'currentColor' : 'none'} />
+                    <span>{post.likes}</span>
+                  </button>
+                  <div className="flex items-center space-x-1">
+                    <MessageCircle size={20} />
+                    <span>{post.comments?.length || 0}</span>
+                  </div>
+                  <button 
+                    className={`transition-colors ${post.isSaved ? 'text-accent-pink' : 'hover:text-accent-pink'}`}
+                    onClick={() => handleSave(post.id)}
+                  >
+                    {post.isSaved ? <BookmarkCheck size={20} /> : <Bookmark size={20} />}
+                  </button>
                 </div>
                 <span className="text-xs">{post.createdAt}</span>
               </div>
