@@ -1,67 +1,183 @@
 import { useState, useEffect } from 'react';
-import { moods } from '../data/mockData';
-import { Mood } from '../types';
-import { Heart, Send } from 'lucide-react';
+import { Heart, Send, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { toast } from 'react-hot-toast';
+import { formatDistanceToNow } from 'date-fns';
+
+interface Mood {
+  _id: string;
+  text: string;
+  author: {
+    _id: string;
+    name: string;
+    username: string;
+    profilePic?: string;
+  };
+  likes: string[];
+  likesCount: number;
+  mood: string;
+  backgroundColor: string;
+  textColor: string;
+  createdAt: string;
+}
 
 const Moods = () => {
   const [userMoods, setUserMoods] = useState<Mood[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [newMood, setNewMood] = useState('');
-  const { followingUsers, registeredUsers, user } = useAuth();
+  const [selectedMoodType, setSelectedMoodType] = useState('neutral');
+  const [selectedBgColor, setSelectedBgColor] = useState('#FF2E93');
+  const [isCreating, setIsCreating] = useState(false);
+  const { user } = useAuth();
+
+  const moodTypes = [
+    { value: 'happy', label: '😊 Happy', color: '#4CAF50' },
+    { value: 'sad', label: '😢 Sad', color: '#2196F3' },
+    { value: 'excited', label: '🎉 Excited', color: '#FF9800' },
+    { value: 'angry', label: '😠 Angry', color: '#F44336' },
+    { value: 'love', label: '❤️ Love', color: '#E91E63' },
+    { value: 'surprised', label: '😲 Surprised', color: '#9C27B0' },
+    { value: 'neutral', label: '😐 Neutral', color: '#FF2E93' },
+  ];
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      // Filter moods to show only from followed users and registered users
-      const followedUserIds = followingUsers.map(u => u.id);
-      const registeredUserIds = registeredUsers.map(u => u.id);
-      
-      const personalizedMoods = moods.filter(mood => {
-        const isCurrentUser = mood.author.id === user?.id;
-        const isFollowedUser = followedUserIds.includes(mood.author.id);
-        const isRegisteredUser = registeredUserIds.includes(mood.author.id);
-        
-        return isCurrentUser || (isFollowedUser && isRegisteredUser);
+    loadMoods();
+  }, []);
+
+  const loadMoods = async () => {
+    try {
+      const token = localStorage.getItem('socialee_token');
+      if (!token) return;
+
+      const response = await fetch('http://localhost:5000/api/moods/feed', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
       });
 
-      // If no personalized moods, show sample moods from registered users
-      const finalMoods = personalizedMoods.length > 0 
-        ? personalizedMoods 
-        : moods.filter(mood => registeredUserIds.includes(mood.author.id)).slice(0, 3);
-
-      setUserMoods(finalMoods);
+      if (response.ok) {
+        const moods = await response.json();
+        setUserMoods(moods);
+      } else {
+        console.error('Failed to load moods');
+      }
+    } catch (error) {
+      console.error('Error loading moods:', error);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
+  };
 
-    return () => clearTimeout(timer);
-  }, [followingUsers, registeredUsers, user]);
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (newMood.trim() === '' || !user) return;
     
-    // Create new mood
-    const newMoodPost: Mood = {
-      id: `mood-${Date.now()}`,
-      text: newMood.trim(),
-      author: user,
-      likes: 0,
-      createdAt: 'just now'
-    };
+    setIsCreating(true);
 
-    // Add to moods list
-    setUserMoods(prev => [newMoodPost, ...prev]);
-    setNewMood('');
+    try {
+      const token = localStorage.getItem('socialee_token');
+      if (!token) {
+        toast.error('Please log in to post a mood');
+        return;
+      }
+
+      const moodData = {
+        text: newMood.trim(),
+        mood: selectedMoodType,
+        backgroundColor: selectedBgColor,
+        textColor: '#FFFFFF'
+      };
+
+      const response = await fetch('http://localhost:5000/api/moods', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(moodData),
+      });
+
+      if (response.ok) {
+        const newMoodPost = await response.json();
+        setUserMoods(prev => [newMoodPost, ...prev]);
+        setNewMood('');
+        setSelectedMoodType('neutral');
+        setSelectedBgColor('#FF2E93');
+        toast.success('Mood posted successfully!');
+      } else {
+        const error = await response.json();
+        toast.error(error.error || 'Failed to post mood');
+      }
+    } catch (error) {
+      console.error('Error creating mood:', error);
+      toast.error('Failed to post mood');
+    } finally {
+      setIsCreating(false);
+    }
   };
 
-  const handleLike = (moodId: string) => {
-    setUserMoods(prevMoods => 
-      prevMoods.map(mood => 
-        mood.id === moodId ? { ...mood, likes: mood.likes + 1 } : mood
-      )
-    );
+  const handleLike = async (moodId: string) => {
+    try {
+      const token = localStorage.getItem('socialee_token');
+      if (!token) {
+        toast.error('Please log in to like moods');
+        return;
+      }
+
+      const response = await fetch(`http://localhost:5000/api/moods/${moodId}/like`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setUserMoods(prevMoods => 
+          prevMoods.map(mood => 
+            mood._id === moodId 
+              ? { ...mood, likes: result.mood.likes, likesCount: result.likes }
+              : mood
+          )
+        );
+      } else {
+        toast.error('Failed to like mood');
+      }
+    } catch (error) {
+      console.error('Error liking mood:', error);
+      toast.error('Failed to like mood');
+    }
+  };
+
+  const handleDeleteMood = async (moodId: string) => {
+    if (!confirm('Are you sure you want to delete this mood?')) return;
+
+    try {
+      const token = localStorage.getItem('socialee_token');
+      if (!token) return;
+
+      const response = await fetch(`http://localhost:5000/api/moods/${moodId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        setUserMoods(prev => prev.filter(mood => mood._id !== moodId));
+        toast.success('Mood deleted successfully');
+      } else {
+        toast.error('Failed to delete mood');
+      }
+    } catch (error) {
+      console.error('Error deleting mood:', error);
+      toast.error('Failed to delete mood');
+    }
   };
 
   if (isLoading) {
@@ -91,6 +207,33 @@ const Moods = () => {
             onChange={(e) => setNewMood(e.target.value)}
             maxLength={280}
           ></textarea>
+          
+          {/* Mood type selector */}
+          <div>
+            <label className="block text-sm font-medium text-text-secondary mb-2">
+              Mood Type
+            </label>
+            <div className="grid grid-cols-4 gap-2">
+              {moodTypes.map((mood) => (
+                <button
+                  key={mood.value}
+                  type="button"
+                  className={`p-2 rounded-lg text-xs transition-colors ${
+                    selectedMoodType === mood.value
+                      ? 'bg-accent-pink text-white'
+                      : 'bg-background-light hover:bg-background-card'
+                  }`}
+                  onClick={() => {
+                    setSelectedMoodType(mood.value);
+                    setSelectedBgColor(mood.color);
+                  }}
+                >
+                  {mood.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="flex justify-between items-center">
             <span className="text-xs text-text-secondary">
               {newMood.length}/280 characters
@@ -98,10 +241,10 @@ const Moods = () => {
             <button 
               type="submit" 
               className="btn-primary flex items-center gap-2"
-              disabled={newMood.trim() === ''}
+              disabled={newMood.trim() === '' || isCreating}
             >
               <Send size={16} />
-              <span>Post Mood</span>
+              <span>{isCreating ? 'Posting...' : 'Post Mood'}</span>
             </button>
           </div>
         </form>
@@ -119,33 +262,59 @@ const Moods = () => {
         <div className="space-y-4">
           {userMoods.map((mood, index) => (
             <motion.div
-              key={mood.id}
+              key={mood._id}
               className="card p-4"
+              style={{ backgroundColor: mood.backgroundColor }}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: index * 0.1 }}
             >
-              <div className="flex items-center mb-3">
-                <img 
-                  src={mood.author.profilePic} 
-                  alt={mood.author.name} 
-                  className="h-10 w-10 rounded-full object-cover"
-                />
-                <div className="ml-3">
-                  <div className="font-medium">
-                    {mood.author.id === user?.id ? 'You' : mood.author.name}
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center">
+                  <div className="h-10 w-10 rounded-full overflow-hidden bg-background-light flex items-center justify-center">
+                    {mood.author.profilePic ? (
+                      <img 
+                        src={mood.author.profilePic} 
+                        alt={mood.author.name} 
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="font-medium text-text-primary">
+                        {mood.author.name.charAt(0).toUpperCase()}
+                      </span>
+                    )}
                   </div>
-                  <div className="text-xs text-text-muted">{mood.createdAt}</div>
+                  <div className="ml-3">
+                    <div className="font-medium" style={{ color: mood.textColor }}>
+                      {mood.author._id === user?.id ? 'You' : mood.author.name}
+                    </div>
+                    <div className="text-xs opacity-75" style={{ color: mood.textColor }}>
+                      {formatDistanceToNow(new Date(mood.createdAt), { addSuffix: true })}
+                    </div>
+                  </div>
                 </div>
+                {mood.author._id === user?.id && (
+                  <button
+                    onClick={() => handleDeleteMood(mood._id)}
+                    className="p-2 rounded-full hover:bg-black hover:bg-opacity-20 transition-colors"
+                    style={{ color: mood.textColor }}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
               </div>
-              <p className="text-text-primary mb-3">{mood.text}</p>
-              <div className="flex items-center text-text-muted">
+              <p className="mb-3" style={{ color: mood.textColor }}>{mood.text}</p>
+              <div className="flex items-center">
                 <button 
-                  className="flex items-center gap-1 hover:text-accent-pink transition-colors"
-                  onClick={() => handleLike(mood.id)}
+                  className="flex items-center gap-1 hover:opacity-80 transition-opacity"
+                  style={{ color: mood.textColor }}
+                  onClick={() => handleLike(mood._id)}
                 >
-                  <Heart size={18} />
-                  <span className="text-sm">{mood.likes}</span>
+                  <Heart 
+                    size={18} 
+                    fill={mood.likes.includes(user?.id || '') ? 'currentColor' : 'none'}
+                  />
+                  <span className="text-sm">{mood.likesCount || 0}</span>
                 </button>
               </div>
             </motion.div>

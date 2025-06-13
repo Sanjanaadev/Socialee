@@ -4,6 +4,8 @@ const connectDB = require('./config/db');
 const authRoutes = require('./routes/auth');
 const postsRoutes = require('./routes/posts');
 const usersRoutes = require('./routes/users');
+const snapsRoutes = require('./routes/snaps');
+const moodsRoutes = require('./routes/moods');
 
 require('dotenv').config();
 
@@ -22,6 +24,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/api/auth', authRoutes);
 app.use('/api/posts', postsRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/snaps', snapsRoutes);
+app.use('/api/moods', moodsRoutes);
 
 // Sample Route
 app.get('/', (req, res) => {
@@ -78,15 +82,23 @@ app.get('/api/debug/data', async (req, res) => {
   try {
     const User = require('./models/User');
     const Post = require('./models/Post');
+    const Snap = require('./models/Snap');
+    const Mood = require('./models/Mood');
     
     const users = await User.find({}).select('-password');
     const posts = await Post.find({}).populate('author', 'name username');
+    const snaps = await Snap.find({}).populate('author', 'name username');
+    const moods = await Mood.find({}).populate('author', 'name username');
     
     res.json({
       users: users,
       posts: posts,
+      snaps: snaps,
+      moods: moods,
       userCount: users.length,
-      postCount: posts.length
+      postCount: posts.length,
+      snapCount: snaps.length,
+      moodCount: moods.length
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

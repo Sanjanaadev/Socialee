@@ -74,6 +74,11 @@ export const postsAPI = {
     const response = await api.post(`/posts/${postId}/comments`, { text });
     return response.data;
   },
+
+  deletePost: async (postId: string) => {
+    const response = await api.delete(`/posts/${postId}`);
+    return response.data;
+  },
 };
 
 // Users API calls
@@ -99,7 +104,12 @@ export const usersAPI = {
   },
 
   searchUsers: async (query: string) => {
-    const response = await api.get(`/users/search?q=${encodeURIComponent(query)}`);
+    const response = await api.get(`/users/search/users?q=${encodeURIComponent(query)}`);
+    return response.data;
+  },
+
+  getAllUsers: async () => {
+    const response = await api.get('/users/all/users');
     return response.data;
   },
 };

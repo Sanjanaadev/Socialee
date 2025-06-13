@@ -18,6 +18,7 @@ interface AuthContextType {
   updatePassword: (oldPassword: string, newPassword: string) => Promise<void>;
   isAuthenticated: boolean;
   searchUsers: (query: string) => Promise<User[]>;
+  loadAllUsers: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -49,6 +50,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     const token = localStorage.getItem('socialee_token');
     if (token && user) {
       loadUserProfile();
+      loadAllUsers();
     }
   }, []);
 
@@ -71,12 +73,32 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setFollowingUsers(profileData.following || []);
         localStorage.setItem('socialee_user', JSON.stringify(updatedUser));
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading user profile:', error);
       // If token is invalid, clear it
       if (error.response?.status === 401) {
         logout();
       }
+    }
+  };
+
+  const loadAllUsers = async () => {
+    try {
+      const users = await usersAPI.getAllUsers();
+      const formattedUsers = users.map((user: any) => ({
+        id: user._id,
+        name: user.name,
+        username: user.username,
+        email: user.email || '',
+        profilePic: user.profilePic || '',
+        bio: user.bio || '',
+        followers: user.followers?.length || 0,
+        following: user.following?.length || 0,
+        posts: 0
+      }));
+      setRegisteredUsers(formattedUsers);
+    } catch (error) {
+      console.error('Error loading all users:', error);
     }
   };
 
@@ -106,6 +128,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setFollowingUsers(userData.following);
       }
       
+      // Load all registered users
+      await loadAllUsers();
+      
       toast.success('Welcome back!');
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || 'Login failed';
@@ -117,6 +142,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       const response = await authAPI.signup(name, username, email, password);
       toast.success('Account created successfully! Please log in.');
+      
+      // Reload all users to include the new user
+      await loadAllUsers();
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || 'Signup failed';
       throw new Error(errorMessage);
@@ -138,6 +166,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       
       setUser(formattedUser);
       localStorage.setItem('socialee_user', JSON.stringify(formattedUser));
+      
+      // Reload all users to reflect the updated profile
+      await loadAllUsers();
+      
       toast.success('Profile updated successfully!');
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || 'Failed to update profile';
@@ -242,6 +274,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     updatePassword,
     isAuthenticated: !!user,
     searchUsers,
+    loadAllUsers,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,10 +1,25 @@
 import { useState, useEffect } from 'react';
-import { snaps } from '../data/mockData';
-import { Snap } from '../types';
 import { Plus, Camera, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
+import { formatDistanceToNow } from 'date-fns';
+
+interface Snap {
+  _id: string;
+  mediaUrl: string;
+  mediaType: string;
+  caption?: string;
+  author: {
+    _id: string;
+    name: string;
+    username: string;
+    profilePic?: string;
+  };
+  createdAt: string;
+  expiresAt: string;
+  viewsCount: number;
+}
 
 const Snaps = () => {
   const [userSnaps, setUserSnaps] = useState<Snap[]>([]);
@@ -14,38 +29,58 @@ const Snaps = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [caption, setCaption] = useState('');
   const [isCreating, setIsCreating] = useState(false);
-  const { followingUsers, registeredUsers, user } = useAuth();
+  const { user } = useAuth();
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      // Filter snaps to show only from followed users and registered users
-      const followedUserIds = followingUsers.map(u => u.id);
-      const registeredUserIds = registeredUsers.map(u => u.id);
-      
-      const personalizedSnaps = snaps.filter(snap => {
-        const isCurrentUser = snap.author.id === user?.id;
-        const isFollowedUser = followedUserIds.includes(snap.author.id);
-        const isRegisteredUser = registeredUserIds.includes(snap.author.id);
-        
-        return isCurrentUser || (isFollowedUser && isRegisteredUser);
+    loadSnaps();
+  }, []);
+
+  const loadSnaps = async () => {
+    try {
+      const token = localStorage.getItem('socialee_token');
+      if (!token) return;
+
+      const response = await fetch('http://localhost:5000/api/snaps/feed', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
       });
 
-      // If no personalized snaps, show sample snaps from registered users
-      const finalSnaps = personalizedSnaps.length > 0 
-        ? personalizedSnaps 
-        : snaps.filter(snap => registeredUserIds.includes(snap.author.id)).slice(0, 4);
-
-      setUserSnaps(finalSnaps);
+      if (response.ok) {
+        const snaps = await response.json();
+        setUserSnaps(snaps);
+      } else {
+        console.error('Failed to load snaps');
+      }
+    } catch (error) {
+      console.error('Error loading snaps:', error);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
+  };
 
-    return () => clearTimeout(timer);
-  }, [followingUsers, registeredUsers, user]);
-
-  const handleViewSnap = (snap: Snap) => {
+  const handleViewSnap = async (snap: Snap) => {
     setActiveSnap(snap);
     setShowSnapModal(true);
+
+    // Mark snap as viewed
+    try {
+      const token = localStorage.getItem('socialee_token');
+      if (token) {
+        await fetch(`http://localhost:5000/api/snaps/${snap._id}/view`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+      }
+    } catch (error) {
+      console.error('Error marking snap as viewed:', error);
+    }
   };
 
   const handleCloseSnap = () => {
@@ -90,25 +125,44 @@ const Snaps = () => {
     setIsCreating(true);
     
     try {
-      // Create new snap
-      const newSnap: Snap = {
-        id: `snap-${Date.now()}`,
+      const token = localStorage.getItem('socialee_token');
+      if (!token) {
+        toast.error('Please log in to create a snap');
+        return;
+      }
+
+      const snapData = {
         mediaUrl: previewUrl!,
-        author: user,
-        createdAt: 'just now',
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours from now
+        caption: caption.trim(),
+        mediaType: selectedFile.type.startsWith('image/') ? 'image' : 'video'
       };
 
-      // Add to snaps list
-      setUserSnaps(prev => [newSnap, ...prev]);
-      
-      // Close modal and reset state
-      setShowCreateModal(false);
-      setSelectedFile(null);
-      setPreviewUrl(null);
-      
-      toast.success('Snap created successfully!');
+      const response = await fetch('http://localhost:5000/api/snaps', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(snapData),
+      });
+
+      if (response.ok) {
+        const newSnap = await response.json();
+        setUserSnaps(prev => [newSnap, ...prev]);
+        
+        // Close modal and reset state
+        setShowCreateModal(false);
+        setSelectedFile(null);
+        setPreviewUrl(null);
+        setCaption('');
+        
+        toast.success('Snap created successfully!');
+      } else {
+        const error = await response.json();
+        toast.error(error.error || 'Failed to create snap');
+      }
     } catch (error) {
+      console.error('Error creating snap:', error);
       toast.error('Failed to create snap');
     } finally {
       setIsCreating(false);
@@ -119,6 +173,7 @@ const Snaps = () => {
     setShowCreateModal(false);
     setSelectedFile(null);
     setPreviewUrl(null);
+    setCaption('');
   };
 
   if (isLoading) {
@@ -163,7 +218,7 @@ const Snaps = () => {
         ) : (
           userSnaps.map((snap, index) => (
             <motion.div
-              key={snap.id}
+              key={snap._id}
               className="aspect-square rounded-lg overflow-hidden cursor-pointer"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -173,20 +228,36 @@ const Snaps = () => {
               onClick={() => handleViewSnap(snap)}
             >
               <div className="relative h-full w-full">
-                <img 
-                  src={snap.mediaUrl} 
-                  alt="Snap" 
-                  className="h-full w-full object-cover"
-                />
+                {snap.mediaType === 'video' ? (
+                  <video 
+                    src={snap.mediaUrl} 
+                    className="h-full w-full object-cover"
+                    muted
+                  />
+                ) : (
+                  <img 
+                    src={snap.mediaUrl} 
+                    alt="Snap" 
+                    className="h-full w-full object-cover"
+                  />
+                )}
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2">
                   <div className="flex items-center">
-                    <img 
-                      src={snap.author.profilePic} 
-                      alt={snap.author.name} 
-                      className="h-6 w-6 rounded-full object-cover border border-white"
-                    />
+                    <div className="h-6 w-6 rounded-full overflow-hidden bg-background-light flex items-center justify-center border border-white">
+                      {snap.author.profilePic ? (
+                        <img 
+                          src={snap.author.profilePic} 
+                          alt={snap.author.name} 
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-xs font-medium text-white">
+                          {snap.author.name.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
                     <span className="ml-1 text-xs text-white truncate">
-                      {snap.author.id === user?.id ? 'You' : snap.author.name}
+                      {snap.author._id === user?.id ? 'You' : snap.author.name}
                     </span>
                   </div>
                 </div>
@@ -258,6 +329,22 @@ const Snaps = () => {
                     </button>
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-1">
+                      Caption (optional)
+                    </label>
+                    <textarea
+                      className="input h-20 resize-none"
+                      placeholder="Add a caption..."
+                      value={caption}
+                      onChange={(e) => setCaption(e.target.value)}
+                      maxLength={200}
+                    />
+                    <p className="text-xs text-text-secondary mt-1">
+                      {caption.length}/200 characters
+                    </p>
+                  </div>
+
                   <div className="flex justify-end gap-4">
                     <button
                       onClick={handleCloseCreateModal}
@@ -291,25 +378,52 @@ const Snaps = () => {
               exit={{ opacity: 0, scale: 0.9 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <img 
-                src={activeSnap.mediaUrl} 
-                alt="Snap" 
-                className="h-full w-full object-contain rounded-lg"
-              />
+              {activeSnap.mediaType === 'video' ? (
+                <video 
+                  src={activeSnap.mediaUrl} 
+                  className="h-full w-full object-contain rounded-lg"
+                  controls
+                  autoPlay
+                />
+              ) : (
+                <img 
+                  src={activeSnap.mediaUrl} 
+                  alt="Snap" 
+                  className="h-full w-full object-contain rounded-lg"
+                />
+              )}
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4">
-                <div className="flex items-center">
-                  <img 
-                    src={activeSnap.author.profilePic} 
-                    alt={activeSnap.author.name} 
-                    className="h-8 w-8 rounded-full object-cover border border-white"
-                  />
-                  <div className="ml-2">
-                    <p className="text-white font-medium">
-                      {activeSnap.author.id === user?.id ? 'Your Snap' : activeSnap.author.name}
-                    </p>
-                    <p className="text-xs text-gray-300">{activeSnap.createdAt}</p>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <div className="h-8 w-8 rounded-full overflow-hidden bg-background-light flex items-center justify-center border border-white">
+                      {activeSnap.author.profilePic ? (
+                        <img 
+                          src={activeSnap.author.profilePic} 
+                          alt={activeSnap.author.name} 
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-sm font-medium text-white">
+                          {activeSnap.author.name.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    <div className="ml-2">
+                      <p className="text-white font-medium">
+                        {activeSnap.author._id === user?.id ? 'Your Snap' : activeSnap.author.name}
+                      </p>
+                      <p className="text-xs text-gray-300">
+                        {formatDistanceToNow(new Date(activeSnap.createdAt), { addSuffix: true })}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-300">{activeSnap.viewsCount} views</p>
                   </div>
                 </div>
+                {activeSnap.caption && (
+                  <p className="text-white mt-2">{activeSnap.caption}</p>
+                )}
               </div>
             </motion.div>
           </div>

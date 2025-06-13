@@ -166,8 +166,8 @@ router.post('/:userId/unfollow', auth, async (req, res) => {
   }
 });
 
-// Search users
-router.get('/search', async (req, res) => {
+// Search users - Fixed route order
+router.get('/search/users', async (req, res) => {
   try {
     const { q } = req.query;
     
@@ -191,6 +191,21 @@ router.get('/search', async (req, res) => {
   } catch (err) {
     console.error('Search users error:', err);
     res.status(500).json({ error: 'Error searching users: ' + err.message });
+  }
+});
+
+// Get all users (for development/testing)
+router.get('/all/users', async (req, res) => {
+  try {
+    const users = await User.find({})
+      .select('name username profilePic bio followers following')
+      .limit(50);
+    
+    console.log(`✅ Found ${users.length} total users`);
+    res.json(users);
+  } catch (err) {
+    console.error('Get all users error:', err);
+    res.status(500).json({ error: 'Error fetching users: ' + err.message });
   }
 });
 
