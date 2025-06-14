@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Plus, Camera, X } from 'lucide-react';
+import { Plus, Camera, X, Heart, Smile, Laugh, Frown, ThumbsUp, Eye } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { snapsAPI } from '../services/api';
 import { toast } from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -19,6 +20,11 @@ interface Snap {
   createdAt: string;
   expiresAt: string;
   viewsCount: number;
+  reactions?: Array<{
+    user: string;
+    type: string;
+    createdAt: string;
+  }>;
 }
 
 const Snaps = () => {
@@ -31,7 +37,17 @@ const Snaps = () => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [showReactions, setShowReactions] = useState(false);
   const { user } = useAuth();
+
+  const reactionTypes = [
+    { type: 'like', icon: Heart, color: '#FF2E93' },
+    { type: 'love', icon: Heart, color: '#E91E63' },
+    { type: 'laugh', icon: Laugh, color: '#FFC107' },
+    { type: 'wow', icon: Smile, color: '#2196F3' },
+    { type: 'sad', icon: Frown, color: '#607D8B' },
+    { type: 'angry', icon: ThumbsUp, color: '#F44336' },
+  ];
 
   useEffect(() => {
     loadSnaps();
@@ -39,24 +55,11 @@ const Snaps = () => {
 
   const loadSnaps = async () => {
     try {
-      const token = localStorage.getItem('socialee_token');
-      if (!token) return;
-
-      const response = await fetch('http://localhost:5000/api/snaps/feed', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const snaps = await response.json();
-        setUserSnaps(snaps);
-      } else {
-        console.error('Failed to load snaps');
-      }
+      const snaps = await snapsAPI.getFeedSnaps();
+      setUserSnaps(snaps);
     } catch (error) {
       console.error('Error loading snaps:', error);
+      toast.error('Failed to load snaps');
     } finally {
       setIsLoading(false);
     }
@@ -68,16 +71,7 @@ const Snaps = () => {
 
     // Mark snap as viewed
     try {
-      const token = localStorage.getItem('socialee_token');
-      if (token) {
-        await fetch(`http://localhost:5000/api/snaps/${snap._id}/view`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-      }
+      await snapsAPI.viewSnap(snap._id);
     } catch (error) {
       console.error('Error marking snap as viewed:', error);
     }
@@ -86,6 +80,7 @@ const Snaps = () => {
   const handleCloseSnap = () => {
     setActiveSnap(null);
     setShowSnapModal(false);
+    setShowReactions(false);
   };
 
   const handleCreateSnap = () => {
@@ -125,45 +120,26 @@ const Snaps = () => {
     setIsCreating(true);
     
     try {
-      const token = localStorage.getItem('socialee_token');
-      if (!token) {
-        toast.error('Please log in to create a snap');
-        return;
-      }
-
       const snapData = {
         mediaUrl: previewUrl!,
         caption: caption.trim(),
         mediaType: selectedFile.type.startsWith('image/') ? 'image' : 'video'
       };
 
-      const response = await fetch('http://localhost:5000/api/snaps', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(snapData),
-      });
-
-      if (response.ok) {
-        const newSnap = await response.json();
-        setUserSnaps(prev => [newSnap, ...prev]);
-        
-        // Close modal and reset state
-        setShowCreateModal(false);
-        setSelectedFile(null);
-        setPreviewUrl(null);
-        setCaption('');
-        
-        toast.success('Snap created successfully!');
-      } else {
-        const error = await response.json();
-        toast.error(error.error || 'Failed to create snap');
-      }
-    } catch (error) {
+      const newSnap = await snapsAPI.createSnap(snapData);
+      setUserSnaps(prev => [newSnap, ...prev]);
+      
+      // Close modal and reset state
+      setShowCreateModal(false);
+      setSelectedFile(null);
+      setPreviewUrl(null);
+      setCaption('');
+      
+      toast.success('Snap created successfully!');
+    } catch (error: any) {
       console.error('Error creating snap:', error);
-      toast.error('Failed to create snap');
+      const errorMessage = error.response?.data?.error || 'Failed to create snap';
+      toast.error(errorMessage);
     } finally {
       setIsCreating(false);
     }
@@ -174,6 +150,37 @@ const Snaps = () => {
     setSelectedFile(null);
     setPreviewUrl(null);
     setCaption('');
+  };
+
+  const handleReaction = async (reactionType: string) => {
+    if (!activeSnap || !user) return;
+
+    try {
+      const updatedSnap = await snapsAPI.reactToSnap(activeSnap._id, reactionType);
+      setActiveSnap(updatedSnap);
+      setUserSnaps(prev => 
+        prev.map(snap => snap._id === activeSnap._id ? updatedSnap : snap)
+      );
+      setShowReactions(false);
+      toast.success(`Reacted with ${reactionType}!`);
+    } catch (error: any) {
+      console.error('Error reacting to snap:', error);
+      toast.error('Failed to react to snap');
+    }
+  };
+
+  const getUserReaction = (snap: Snap) => {
+    if (!snap.reactions || !user) return null;
+    return snap.reactions.find(r => r.user === user.id);
+  };
+
+  const getReactionCounts = (snap: Snap) => {
+    if (!snap.reactions) return {};
+    const counts: { [key: string]: number } = {};
+    snap.reactions.forEach(reaction => {
+      counts[reaction.type] = (counts[reaction.type] || 0) + 1;
+    });
+    return counts;
   };
 
   if (isLoading) {
@@ -242,23 +249,29 @@ const Snaps = () => {
                   />
                 )}
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2">
-                  <div className="flex items-center">
-                    <div className="h-6 w-6 rounded-full overflow-hidden bg-background-light flex items-center justify-center border border-white">
-                      {snap.author.profilePic ? (
-                        <img 
-                          src={snap.author.profilePic} 
-                          alt={snap.author.name} 
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-xs font-medium text-white">
-                          {snap.author.name.charAt(0).toUpperCase()}
-                        </span>
-                      )}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className="h-6 w-6 rounded-full overflow-hidden bg-background-light flex items-center justify-center border border-white">
+                        {snap.author.profilePic ? (
+                          <img 
+                            src={snap.author.profilePic} 
+                            alt={snap.author.name} 
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-xs font-medium text-white">
+                            {snap.author.name.charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                      <span className="ml-1 text-xs text-white truncate">
+                        {snap.author._id === user?.id ? 'You' : snap.author.name}
+                      </span>
                     </div>
-                    <span className="ml-1 text-xs text-white truncate">
-                      {snap.author._id === user?.id ? 'You' : snap.author.name}
-                    </span>
+                    <div className="flex items-center space-x-1">
+                      <Eye size={12} className="text-white" />
+                      <span className="text-xs text-white">{snap.viewsCount}</span>
+                    </div>
                   </div>
                 </div>
                 <div className="absolute inset-0 ring-2 ring-accent-pink ring-offset-0 rounded-lg"></div>
@@ -392,8 +405,10 @@ const Snaps = () => {
                   className="h-full w-full object-contain rounded-lg"
                 />
               )}
+              
+              {/* Snap Info Overlay */}
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center">
                     <div className="h-8 w-8 rounded-full overflow-hidden bg-background-light flex items-center justify-center border border-white">
                       {activeSnap.author.profilePic ? (
@@ -417,13 +432,78 @@ const Snaps = () => {
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-gray-300">{activeSnap.viewsCount} views</p>
+                  <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-1">
+                      <Eye size={16} className="text-white" />
+                      <span className="text-sm text-white">{activeSnap.viewsCount}</span>
+                    </div>
+                    {activeSnap.author._id !== user?.id && (
+                      <button
+                        onClick={() => setShowReactions(!showReactions)}
+                        className="p-2 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-colors"
+                      >
+                        <Heart size={16} className="text-white" />
+                      </button>
+                    )}
                   </div>
                 </div>
+                
                 {activeSnap.caption && (
-                  <p className="text-white mt-2">{activeSnap.caption}</p>
+                  <p className="text-white mb-3">{activeSnap.caption}</p>
                 )}
+
+                {/* Reaction Counts */}
+                {activeSnap.reactions && activeSnap.reactions.length > 0 && (
+                  <div className="flex items-center space-x-2 mb-2">
+                    {Object.entries(getReactionCounts(activeSnap)).map(([type, count]) => {
+                      const reactionConfig = reactionTypes.find(r => r.type === type);
+                      if (!reactionConfig) return null;
+                      const Icon = reactionConfig.icon;
+                      return (
+                        <div key={type} className="flex items-center space-x-1 bg-white bg-opacity-20 rounded-full px-2 py-1">
+                          <Icon size={12} style={{ color: reactionConfig.color }} />
+                          <span className="text-xs text-white">{count}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Reactions Panel */}
+                <AnimatePresence>
+                  {showReactions && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 20 }}
+                      className="flex items-center justify-center space-x-3 bg-white bg-opacity-20 rounded-full p-3"
+                    >
+                      {reactionTypes.map((reaction) => {
+                        const Icon = reaction.icon;
+                        const userReaction = getUserReaction(activeSnap);
+                        const isSelected = userReaction?.type === reaction.type;
+                        
+                        return (
+                          <button
+                            key={reaction.type}
+                            onClick={() => handleReaction(reaction.type)}
+                            className={`p-2 rounded-full transition-all ${
+                              isSelected 
+                                ? 'bg-white bg-opacity-40 scale-110' 
+                                : 'hover:bg-white hover:bg-opacity-30 hover:scale-105'
+                            }`}
+                          >
+                            <Icon 
+                              size={20} 
+                              style={{ color: reaction.color }}
+                              fill={isSelected ? reaction.color : 'none'}
+                            />
+                          </button>
+                        );
+                      })}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </motion.div>
           </div>

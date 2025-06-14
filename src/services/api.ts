@@ -140,6 +140,11 @@ export const messagesAPI = {
     const response = await api.delete(`/messages/${messageId}`);
     return response.data;
   },
+
+  getUnreadCount: async () => {
+    const response = await api.get('/messages/unread-count');
+    return response.data;
+  },
 };
 
 // Saved Posts API calls
@@ -161,6 +166,67 @@ export const savedPostsAPI = {
 
   checkIfSaved: async (postId: string) => {
     const response = await api.get(`/saved-posts/${postId}/saved`);
+    return response.data;
+  },
+};
+
+// Notifications API calls
+export const notificationsAPI = {
+  getNotifications: async () => {
+    const response = await api.get('/notifications');
+    return response.data;
+  },
+
+  getUnreadCount: async () => {
+    const response = await api.get('/notifications/unread-count');
+    return response.data;
+  },
+
+  markAsRead: async (notificationId: string) => {
+    const response = await api.put(`/notifications/${notificationId}/read`);
+    return response.data;
+  },
+
+  markAllAsRead: async () => {
+    const response = await api.put('/notifications/mark-all-read');
+    return response.data;
+  },
+
+  deleteNotification: async (notificationId: string) => {
+    const response = await api.delete(`/notifications/${notificationId}`);
+    return response.data;
+  },
+};
+
+// Snaps API calls
+export const snapsAPI = {
+  createSnap: async (snapData: { mediaUrl: string; caption?: string; mediaType: string }) => {
+    const response = await api.post('/snaps', snapData);
+    return response.data;
+  },
+
+  getFeedSnaps: async () => {
+    const response = await api.get('/snaps/feed');
+    return response.data;
+  },
+
+  getUserSnaps: async (userId: string) => {
+    const response = await api.get(`/snaps/user/${userId}`);
+    return response.data;
+  },
+
+  viewSnap: async (snapId: string) => {
+    const response = await api.post(`/snaps/${snapId}/view`);
+    return response.data;
+  },
+
+  reactToSnap: async (snapId: string, reaction: string) => {
+    const response = await api.post(`/snaps/${snapId}/react`, { reaction });
+    return response.data;
+  },
+
+  deleteSnap: async (snapId: string) => {
+    const response = await api.delete(`/snaps/${snapId}`);
     return response.data;
   },
 };

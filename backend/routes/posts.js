@@ -3,6 +3,7 @@ const router = express.Router();
 const Post = require('../models/Post');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
+const { notifyFollowersOfNewPost, notifyPostInteraction } = require('../utils/notifications');
 
 // Create a new post
 router.post('/', auth, async (req, res) => {
@@ -29,6 +30,9 @@ router.post('/', auth, async (req, res) => {
     
     // Populate author details
     await savedPost.populate('author', 'name username profilePic');
+
+    // Notify followers of new post
+    await notifyFollowersOfNewPost(req.userId, savedPost._id, 'post');
 
     console.log('✅ Post created successfully:', savedPost._id);
     res.status(201).json(savedPost);
@@ -107,6 +111,12 @@ router.post('/:postId/like', auth, async (req, res) => {
       post.likes = post.likes.filter(id => id.toString() !== userId);
     } else {
       post.likes.push(userId);
+      
+      // Create notification for post author (only when liking, not unliking)
+      if (post.author.toString() !== userId) {
+        const user = await User.findById(userId);
+        await notifyPostInteraction(post.author, userId, 'like', postId, user.name);
+      }
     }
 
     await post.save();
@@ -156,6 +166,12 @@ router.post('/:postId/comments', auth, async (req, res) => {
     await post.populate('comments.author', 'name username profilePic');
     
     const addedComment = post.comments[post.comments.length - 1];
+    
+    // Create notification for post author
+    if (post.author.toString() !== userId) {
+      const user = await User.findById(userId);
+      await notifyPostInteraction(post.author, userId, 'comment', postId, user.name);
+    }
     
     console.log('✅ Comment added successfully');
     res.status(201).json(addedComment);

@@ -3,6 +3,7 @@ const router = express.Router();
 const Message = require('../models/Message');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
+const { notifyMessage } = require('../utils/notifications');
 
 // Send a message
 router.post('/send', auth, async (req, res) => {
@@ -41,6 +42,10 @@ router.post('/send', auth, async (req, res) => {
     // Populate sender and receiver details
     await savedMessage.populate('sender', 'name username profilePic');
     await savedMessage.populate('receiver', 'name username profilePic');
+
+    // Create notification for receiver
+    const sender = await User.findById(req.userId);
+    await notifyMessage(receiverId, req.userId, sender.name);
 
     console.log('✅ Message sent successfully:', savedMessage._id);
     res.status(201).json(savedMessage);
@@ -166,6 +171,21 @@ router.put('/conversation/:userId/read', auth, async (req, res) => {
   } catch (err) {
     console.error('Mark conversation as read error:', err);
     res.status(500).json({ error: 'Error marking conversation as read: ' + err.message });
+  }
+});
+
+// Get unread message count
+router.get('/unread-count', auth, async (req, res) => {
+  try {
+    const unreadCount = await Message.countDocuments({
+      receiver: req.userId,
+      read: false
+    });
+
+    res.json({ unreadCount });
+  } catch (err) {
+    console.error('Get unread message count error:', err);
+    res.status(500).json({ error: 'Error fetching unread message count: ' + err.message });
   }
 });
 

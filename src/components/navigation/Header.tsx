@@ -1,12 +1,28 @@
-import { Search, Menu, Bell, User } from 'lucide-react';
+import { Search, Menu, Bell, User, MessageSquare } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { User as UserType } from '../../types';
+import { notificationsAPI, messagesAPI } from '../../services/api';
+import { formatDistanceToNow } from 'date-fns';
 
 interface HeaderProps {
   toggleSidebar: () => void;
+}
+
+interface Notification {
+  _id: string;
+  type: string;
+  message: string;
+  sender: {
+    _id: string;
+    name: string;
+    username: string;
+    profilePic?: string;
+  };
+  read: boolean;
+  createdAt: string;
 }
 
 const Header = ({ toggleSidebar }: HeaderProps) => {
@@ -16,7 +32,11 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [searchResults, setSearchResults] = useState<UserType[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const searchRef = useRef<HTMLDivElement>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
 
   // Search users from backend
   useEffect(() => {
@@ -47,11 +67,52 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
     return () => clearTimeout(timeoutId);
   }, [searchQuery, user, searchUsers]);
 
-  // Close search results when clicking outside
+  // Load notifications and unread counts
+  useEffect(() => {
+    if (user) {
+      loadNotifications();
+      loadUnreadCounts();
+      
+      // Set up polling for real-time updates
+      const interval = setInterval(() => {
+        loadUnreadCounts();
+      }, 30000); // Check every 30 seconds
+
+      return () => clearInterval(interval);
+    }
+  }, [user]);
+
+  const loadNotifications = async () => {
+    try {
+      const notificationsData = await notificationsAPI.getNotifications();
+      setNotifications(notificationsData);
+    } catch (error) {
+      console.error('Error loading notifications:', error);
+    }
+  };
+
+  const loadUnreadCounts = async () => {
+    try {
+      const [notificationCount, messageCount] = await Promise.all([
+        notificationsAPI.getUnreadCount(),
+        messagesAPI.getUnreadCount()
+      ]);
+      
+      setUnreadNotificationCount(notificationCount.unreadCount);
+      setUnreadMessageCount(messageCount.unreadCount);
+    } catch (error) {
+      console.error('Error loading unread counts:', error);
+    }
+  };
+
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
         setShowSearchResults(false);
+      }
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setShowNotifications(false);
       }
     };
 
@@ -75,6 +136,46 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
   const handleSearchFocus = () => {
     if (searchQuery.trim() !== '') {
       setShowSearchResults(true);
+    }
+  };
+
+  const handleNotificationClick = async (notification: Notification) => {
+    // Mark as read if not already read
+    if (!notification.read) {
+      try {
+        await notificationsAPI.markAsRead(notification._id);
+        setNotifications(prev => 
+          prev.map(n => n._id === notification._id ? { ...n, read: true } : n)
+        );
+        setUnreadNotificationCount(prev => Math.max(0, prev - 1));
+      } catch (error) {
+        console.error('Error marking notification as read:', error);
+      }
+    }
+
+    // Navigate based on notification type
+    switch (notification.type) {
+      case 'message':
+        window.location.href = `/messages/${notification.sender._id}`;
+        break;
+      case 'follow':
+        window.location.href = `/profile/${notification.sender._id}`;
+        break;
+      default:
+        // For post, snap, mood notifications, go to sender's profile
+        window.location.href = `/profile/${notification.sender._id}`;
+    }
+    
+    setShowNotifications(false);
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      await notificationsAPI.markAllAsRead();
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setUnreadNotificationCount(0);
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
     }
   };
 
@@ -161,29 +262,97 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
 
       {/* Right side actions */}
       <div className="flex items-center space-x-4">
+        {/* Messages */}
+        <Link to="/messages" className="relative text-text-primary hover:text-accent-pink">
+          <MessageSquare size={24} />
+          {unreadMessageCount > 0 && (
+            <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-accent-pink text-white text-xs flex items-center justify-center">
+              {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
+            </span>
+          )}
+        </Link>
+
         {/* Notifications */}
-        <div className="relative">
+        <div className="relative" ref={notificationRef}>
           <button 
             className="text-text-primary hover:text-accent-pink"
             onClick={() => setShowNotifications(!showNotifications)}
           >
             <Bell size={24} />
-            <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-accent-pink"></span>
+            {unreadNotificationCount > 0 && (
+              <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-accent-pink text-white text-xs flex items-center justify-center">
+                {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+              </span>
+            )}
           </button>
 
           {/* Notification dropdown */}
-          {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-background-card rounded-lg shadow-lg py-2 z-10">
-              <div className="px-4 py-2 border-b border-border">
-                <h3 className="font-medium">Notifications</h3>
-              </div>
-              <div className="max-h-96 overflow-y-auto">
-                <div className="px-4 py-8 text-center text-text-secondary">
-                  No notifications yet
+          <AnimatePresence>
+            {showNotifications && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="absolute right-0 mt-2 w-80 bg-background-card rounded-lg shadow-lg border border-border z-50"
+              >
+                <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+                  <h3 className="font-medium">Notifications</h3>
+                  {unreadNotificationCount > 0 && (
+                    <button
+                      onClick={handleMarkAllAsRead}
+                      className="text-xs text-accent-pink hover:underline"
+                    >
+                      Mark all as read
+                    </button>
+                  )}
                 </div>
-              </div>
-            </div>
-          )}
+                <div className="max-h-96 overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="px-4 py-8 text-center text-text-secondary">
+                      No notifications yet
+                    </div>
+                  ) : (
+                    <div className="py-2">
+                      {notifications.slice(0, 10).map((notification) => (
+                        <div
+                          key={notification._id}
+                          className={`px-4 py-3 hover:bg-background-light cursor-pointer transition-colors ${
+                            !notification.read ? 'bg-accent-pink bg-opacity-5' : ''
+                          }`}
+                          onClick={() => handleNotificationClick(notification)}
+                        >
+                          <div className="flex items-start space-x-3">
+                            <div className="h-8 w-8 rounded-full overflow-hidden bg-background-light flex items-center justify-center">
+                              {notification.sender.profilePic ? (
+                                <img 
+                                  src={notification.sender.profilePic} 
+                                  alt={notification.sender.name} 
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <User size={16} className="text-text-secondary" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-text-primary">
+                                {notification.message}
+                              </p>
+                              <p className="text-xs text-text-secondary mt-1">
+                                {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+                              </p>
+                            </div>
+                            {!notification.read && (
+                              <div className="h-2 w-2 rounded-full bg-accent-pink"></div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* User profile */}

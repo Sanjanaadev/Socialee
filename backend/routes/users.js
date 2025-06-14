@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const auth = require('../middleware/auth');
+const { notifyFollow } = require('../utils/notifications');
 
 // Get user profile
 router.get('/:userId', async (req, res) => {
@@ -125,6 +126,9 @@ router.post('/:userId/follow', auth, async (req, res) => {
     await User.findByIdAndUpdate(userId, {
       $push: { followers: currentUserId }
     });
+
+    // Create notification for followed user
+    await notifyFollow(userId, currentUserId, currentUser.name);
 
     console.log('✅ User followed successfully');
     res.json({ message: 'User followed successfully' });

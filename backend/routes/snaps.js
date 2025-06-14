@@ -3,6 +3,7 @@ const router = express.Router();
 const Snap = require('../models/Snap');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
+const { notifyFollowersOfNewPost } = require('../utils/notifications');
 
 // Create a new snap
 router.post('/', auth, async (req, res) => {
@@ -26,6 +27,9 @@ router.post('/', auth, async (req, res) => {
     
     // Populate author details
     await savedSnap.populate('author', 'name username profilePic');
+
+    // Notify followers of new snap
+    await notifyFollowersOfNewPost(req.userId, savedSnap._id, 'snap');
 
     console.log('✅ Snap created successfully:', savedSnap._id);
     res.status(201).json(savedSnap);
@@ -114,6 +118,51 @@ router.post('/:snapId/view', auth, async (req, res) => {
   } catch (err) {
     console.error('View snap error:', err);
     res.status(500).json({ error: 'Error viewing snap: ' + err.message });
+  }
+});
+
+// React to a snap (like/unlike)
+router.post('/:snapId/react', auth, async (req, res) => {
+  try {
+    const { snapId } = req.params;
+    const { reaction } = req.body; // 'like', 'love', 'laugh', etc.
+    const userId = req.userId;
+
+    console.log('😍 Reacting to snap:', snapId, 'with:', reaction);
+
+    const snap = await Snap.findById(snapId);
+    if (!snap) {
+      return res.status(404).json({ error: 'Snap not found' });
+    }
+
+    // Initialize reactions array if it doesn't exist
+    if (!snap.reactions) {
+      snap.reactions = [];
+    }
+
+    // Check if user already reacted
+    const existingReactionIndex = snap.reactions.findIndex(r => r.user.toString() === userId);
+    
+    if (existingReactionIndex > -1) {
+      // Update existing reaction or remove if same reaction
+      if (snap.reactions[existingReactionIndex].type === reaction) {
+        snap.reactions.splice(existingReactionIndex, 1);
+      } else {
+        snap.reactions[existingReactionIndex].type = reaction;
+      }
+    } else {
+      // Add new reaction
+      snap.reactions.push({ user: userId, type: reaction });
+    }
+
+    await snap.save();
+    await snap.populate('author', 'name username profilePic');
+
+    console.log('✅ Snap reaction updated successfully');
+    res.json(snap);
+  } catch (err) {
+    console.error('React to snap error:', err);
+    res.status(500).json({ error: 'Error reacting to snap: ' + err.message });
   }
 });
 

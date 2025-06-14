@@ -30,6 +30,21 @@ const snapSchema = new mongoose.Schema({
       default: Date.now
     }
   }],
+  reactions: [{
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    type: {
+      type: String,
+      enum: ['like', 'love', 'laugh', 'wow', 'sad', 'angry'],
+      default: 'like'
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   expiresAt: {
     type: Date,
     default: () => new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
@@ -46,6 +61,11 @@ snapSchema.index({ expiresAt: 1 });
 // Virtual for views count
 snapSchema.virtual('viewsCount').get(function() {
   return this.views.length;
+});
+
+// Virtual for reactions count
+snapSchema.virtual('reactionsCount').get(function() {
+  return this.reactions.length;
 });
 
 // Ensure virtual fields are serialized

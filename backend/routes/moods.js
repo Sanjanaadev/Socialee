@@ -3,6 +3,7 @@ const router = express.Router();
 const Mood = require('../models/Mood');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
+const { notifyFollowersOfNewPost } = require('../utils/notifications');
 
 // Create a new mood
 router.post('/', auth, async (req, res) => {
@@ -31,6 +32,9 @@ router.post('/', auth, async (req, res) => {
     
     // Populate author details
     await savedMood.populate('author', 'name username profilePic');
+
+    // Notify followers of new mood
+    await notifyFollowersOfNewPost(req.userId, savedMood._id, 'mood');
 
     console.log('✅ Mood created successfully:', savedMood._id);
     res.status(201).json(savedMood);

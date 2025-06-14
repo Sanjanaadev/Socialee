@@ -8,6 +8,7 @@ const snapsRoutes = require('./routes/snaps');
 const moodsRoutes = require('./routes/moods');
 const messagesRoutes = require('./routes/messages');
 const savedPostsRoutes = require('./routes/savedPosts');
+const notificationsRoutes = require('./routes/notifications');
 
 require('dotenv').config();
 
@@ -30,6 +31,7 @@ app.use('/api/snaps', snapsRoutes);
 app.use('/api/moods', moodsRoutes);
 app.use('/api/messages', messagesRoutes);
 app.use('/api/saved-posts', savedPostsRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 // Sample Route
 app.get('/', (req, res) => {
@@ -90,6 +92,7 @@ app.get('/api/debug/data', async (req, res) => {
     const Mood = require('./models/Mood');
     const Message = require('./models/Message');
     const SavedPost = require('./models/SavedPost');
+    const Notification = require('./models/Notification');
     
     const users = await User.find({}).select('-password');
     const posts = await Post.find({}).populate('author', 'name username');
@@ -97,6 +100,7 @@ app.get('/api/debug/data', async (req, res) => {
     const moods = await Mood.find({}).populate('author', 'name username');
     const messages = await Message.find({}).populate('sender receiver', 'name username');
     const savedPosts = await SavedPost.find({}).populate('user post');
+    const notifications = await Notification.find({}).populate('sender recipient', 'name username');
     
     res.json({
       users: users,
@@ -105,12 +109,14 @@ app.get('/api/debug/data', async (req, res) => {
       moods: moods,
       messages: messages,
       savedPosts: savedPosts,
+      notifications: notifications,
       userCount: users.length,
       postCount: posts.length,
       snapCount: snaps.length,
       moodCount: moods.length,
       messageCount: messages.length,
-      savedPostCount: savedPosts.length
+      savedPostCount: savedPosts.length,
+      notificationCount: notifications.length
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
