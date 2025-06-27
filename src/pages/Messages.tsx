@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Search, MessageSquare, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
@@ -32,10 +32,18 @@ const Messages = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const { user } = useAuth();
+  const location = useLocation();
 
   useEffect(() => {
     loadConversations();
   }, []);
+
+  // Reload conversations when returning to messages page
+  useEffect(() => {
+    if (location.pathname === '/messages') {
+      loadConversations();
+    }
+  }, [location.pathname]);
 
   const loadConversations = async () => {
     try {
@@ -164,7 +172,9 @@ const Messages = () => {
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <p className="text-sm text-text-secondary truncate mt-1">
+                      <p className={`text-sm truncate mt-1 ${
+                        conversation.unreadCount > 0 ? 'text-text-primary font-medium' : 'text-text-secondary'
+                      }`}>
                         {conversation.lastMessage.sender._id === user?.id ? 'You: ' : ''}
                         {conversation.lastMessage.text}
                       </p>

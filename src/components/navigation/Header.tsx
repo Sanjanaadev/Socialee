@@ -2,7 +2,7 @@ import { Search, Menu, Bell, User, MessageSquare } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { User as UserType } from '../../types';
 import { notificationsAPI, messagesAPI } from '../../services/api';
 import { formatDistanceToNow } from 'date-fns';
@@ -27,6 +27,7 @@ interface Notification {
 
 const Header = ({ toggleSidebar }: HeaderProps) => {
   const { user, searchUsers } = useAuth();
+  const location = useLocation();
   const [searchQuery, setSearchQuery] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -76,11 +77,19 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
       // Set up polling for real-time updates
       const interval = setInterval(() => {
         loadUnreadCounts();
-      }, 30000); // Check every 30 seconds
+        loadNotifications(); // Also refresh notifications
+      }, 10000); // Check every 10 seconds
 
       return () => clearInterval(interval);
     }
   }, [user]);
+
+  // Update unread message count when navigating away from messages
+  useEffect(() => {
+    if (user && !location.pathname.startsWith('/messages')) {
+      loadUnreadCounts();
+    }
+  }, [location.pathname, user]);
 
   const loadNotifications = async () => {
     try {
@@ -161,9 +170,15 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
       case 'follow':
         window.location.href = `/profile/${notification.sender._id}`;
         break;
+      case 'mood':
+        window.location.href = `/moods`;
+        break;
+      case 'snap':
+        window.location.href = `/snaps`;
+        break;
       default:
-        // For post, snap, mood notifications, go to sender's profile
-        window.location.href = `/profile/${notification.sender._id}`;
+        // For post notifications, go to home feed
+        window.location.href = `/home`;
     }
     
     setShowNotifications(false);

@@ -122,6 +122,7 @@ router.post('/:moodId/like', auth, async (req, res) => {
 
     await mood.save();
     await mood.populate('author', 'name username profilePic');
+    await mood.populate('comments.author', 'name username profilePic');
 
     console.log(`✅ Mood ${isLiked ? 'unliked' : 'liked'} successfully`);
 
@@ -143,7 +144,7 @@ router.post('/:moodId/comments', auth, async (req, res) => {
     const { text } = req.body;
     const userId = req.userId;
 
-    console.log('💬 Adding comment to mood:', moodId);
+    console.log('💬 Adding comment to mood:', moodId, 'by user:', userId);
 
     if (!text || text.trim() === '') {
       return res.status(400).json({ error: 'Comment text is required' });
@@ -167,18 +168,19 @@ router.post('/:moodId/comments', auth, async (req, res) => {
     mood.comments.push(newComment);
     await mood.save();
     
-    // Populate the new comment's author
+    // Populate the entire mood with all necessary data
+    await mood.populate('author', 'name username profilePic');
     await mood.populate('comments.author', 'name username profilePic');
     
     const addedComment = mood.comments[mood.comments.length - 1];
     
     // Create notification for mood author
-    if (mood.author.toString() !== userId) {
+    if (mood.author._id.toString() !== userId) {
       const user = await User.findById(userId);
-      await notifyPostInteraction(mood.author, userId, 'comment', null, user.name, { relatedMood: moodId });
+      await notifyPostInteraction(mood.author._id, userId, 'comment', null, user.name, { relatedMood: moodId });
     }
     
-    console.log('✅ Comment added successfully');
+    console.log('✅ Comment added successfully to mood:', moodId);
     res.status(201).json(addedComment);
   } catch (err) {
     console.error('Add comment error:', err);

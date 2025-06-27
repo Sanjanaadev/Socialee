@@ -32,7 +32,12 @@ const createNotification = async (recipientId, senderId, type, message, relatedD
 const notifyFollowersOfNewPost = async (authorId, postId, postType = 'post') => {
   try {
     const author = await User.findById(authorId).populate('followers', '_id');
-    if (!author || !author.followers.length) return;
+    if (!author || !author.followers.length) {
+      console.log('No followers to notify for new post');
+      return;
+    }
+
+    console.log(`📢 Notifying ${author.followers.length} followers of new ${postType}`);
 
     const notifications = author.followers.map(follower => ({
       recipient: follower._id,
@@ -57,13 +62,25 @@ const notifyPostInteraction = async (postAuthorId, senderId, type, postId, sende
     let message = '';
     switch (type) {
       case 'like':
-        message = `${senderName} liked your ${extraData.relatedMood ? 'mood' : 'post'}`;
+        if (extraData.relatedMood) {
+          message = `${senderName} liked your mood`;
+        } else if (extraData.relatedSnap) {
+          message = `${senderName} liked your snap`;
+        } else {
+          message = `${senderName} liked your post`;
+        }
         break;
       case 'comment':
-        message = `${senderName} commented on your ${extraData.relatedMood ? 'mood' : 'post'}`;
+        if (extraData.relatedMood) {
+          message = `${senderName} commented on your mood`;
+        } else if (extraData.relatedSnap) {
+          message = `${senderName} commented on your snap`;
+        } else {
+          message = `${senderName} commented on your post`;
+        }
         break;
       default:
-        message = `${senderName} interacted with your ${extraData.relatedMood ? 'mood' : 'post'}`;
+        message = `${senderName} interacted with your content`;
     }
 
     const notificationData = {
@@ -72,6 +89,7 @@ const notifyPostInteraction = async (postAuthorId, senderId, type, postId, sende
     };
 
     await createNotification(postAuthorId, senderId, type, message, notificationData);
+    console.log(`📢 Created ${type} notification for ${postAuthorId}`);
   } catch (error) {
     console.error('Error creating post interaction notification:', error);
   }
@@ -86,6 +104,7 @@ const notifyFollow = async (followedUserId, followerId, followerName) => {
       'follow',
       `${followerName} started following you`
     );
+    console.log(`📢 Created follow notification for ${followedUserId}`);
   } catch (error) {
     console.error('Error creating follow notification:', error);
   }
@@ -100,6 +119,7 @@ const notifyMessage = async (recipientId, senderId, senderName) => {
       'message',
       `${senderName} sent you a message`
     );
+    console.log(`📢 Created message notification for ${recipientId}`);
   } catch (error) {
     console.error('Error creating message notification:', error);
   }

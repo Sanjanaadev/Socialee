@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useLocation } from 'react-router-dom';
 import { ArrowLeft, Send, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
@@ -17,11 +17,19 @@ const Conversation = () => {
   const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
+  const location = useLocation();
 
   useEffect(() => {
     if (!userId) return;
     loadConversation();
   }, [userId]);
+
+  // Mark conversation as read when component mounts or when returning to it
+  useEffect(() => {
+    if (userId && otherUser) {
+      markConversationAsRead();
+    }
+  }, [userId, otherUser, location.pathname]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -80,13 +88,21 @@ const Conversation = () => {
       }));
       setMessages(formattedMessages);
 
-      // Mark conversation as read
-      await messagesAPI.markConversationAsRead(userId);
     } catch (error) {
       console.error('Error loading conversation:', error);
       toast.error('Failed to load conversation');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const markConversationAsRead = async () => {
+    if (!userId) return;
+    
+    try {
+      await messagesAPI.markConversationAsRead(userId);
+    } catch (error) {
+      console.error('Error marking conversation as read:', error);
     }
   };
 

@@ -44,6 +44,7 @@ const Moods = () => {
   const [selectedBgColor, setSelectedBgColor] = useState('#FF2E93');
   const [isCreating, setIsCreating] = useState(false);
   const [newComments, setNewComments] = useState<{ [key: string]: string }>({});
+  const [isCommenting, setIsCommenting] = useState<{ [key: string]: boolean }>({});
   const { user } = useAuth();
 
   const moodTypes = [
@@ -74,6 +75,7 @@ const Moods = () => {
 
       if (response.ok) {
         const moods = await response.json();
+        console.log('Loaded moods:', moods);
         setUserMoods(moods);
       } else {
         console.error('Failed to load moods');
@@ -171,6 +173,8 @@ const Moods = () => {
   const handleComment = async (moodId: string) => {
     if (!newComments[moodId]?.trim() || !user) return;
 
+    setIsCommenting(prev => ({ ...prev, [moodId]: true }));
+
     try {
       const token = localStorage.getItem('socialee_token');
       if (!token) {
@@ -189,6 +193,7 @@ const Moods = () => {
 
       if (response.ok) {
         const comment = await response.json();
+        console.log('Comment added:', comment);
         
         setUserMoods(prevMoods =>
           prevMoods.map(mood =>
@@ -206,11 +211,14 @@ const Moods = () => {
         toast.success('Comment added!');
       } else {
         const error = await response.json();
+        console.error('Comment error:', error);
         toast.error(error.error || 'Failed to add comment');
       }
     } catch (error) {
       console.error('Error adding comment:', error);
       toast.error('Failed to add comment');
+    } finally {
+      setIsCommenting(prev => ({ ...prev, [moodId]: false }));
     }
   };
 
@@ -385,7 +393,7 @@ const Moods = () => {
                     size={18} 
                     fill={mood.likes.includes(user?.id || '') ? 'currentColor' : 'none'}
                   />
-                  <span className="text-sm">{mood.likesCount || 0}</span>
+                  <span className="text-sm">{mood.likesCount || mood.likes?.length || 0}</span>
                 </button>
                 
                 <div className="flex items-center gap-1" style={{ color: mood.textColor }}>
@@ -432,17 +440,19 @@ const Moods = () => {
                   placeholder="Add a comment..."
                   value={newComments[mood._id] || ''}
                   onChange={(e) => setNewComments(prev => ({ ...prev, [mood._id]: e.target.value }))}
-                  onKeyPress={(e) => e.key === 'Enter' && handleComment(mood._id)}
+                  onKeyPress={(e) => e.key === 'Enter' && !isCommenting[mood._id] && handleComment(mood._id)}
                   style={{ 
                     backgroundColor: 'rgba(0, 0, 0, 0.2)',
                     color: mood.textColor,
                     borderColor: `${mood.textColor}50`
                   }}
+                  disabled={isCommenting[mood._id]}
                 />
                 <button
-                  className="p-2 rounded-full hover:bg-black hover:bg-opacity-20 transition-colors"
+                  className="p-2 rounded-full hover:bg-black hover:bg-opacity-20 transition-colors disabled:opacity-50"
                   style={{ color: mood.textColor }}
                   onClick={() => handleComment(mood._id)}
+                  disabled={isCommenting[mood._id] || !newComments[mood._id]?.trim()}
                 >
                   <Send size={16} />
                 </button>
