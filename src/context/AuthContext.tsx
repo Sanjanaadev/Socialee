@@ -178,8 +178,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const updatePassword = async (oldPassword: string, newPassword: string) => {
-    // This would need to be implemented in the backend
-    throw new Error('Password update not implemented yet');
+    if (!user) throw new Error('No user logged in');
+
+    try {
+      await authAPI.changePassword(oldPassword, newPassword);
+      toast.success('Password updated successfully!');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || 'Failed to update password';
+      throw new Error(errorMessage);
+    }
   };
 
   const updateProfilePicture = async (file: File): Promise<string> => {

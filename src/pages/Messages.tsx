@@ -127,17 +127,23 @@ const Messages = () => {
               >
                 <div className="flex items-center">
                   <div className="relative">
-                    <div className="h-12 w-12 rounded-full overflow-hidden bg-background-light flex items-center justify-center">
-                      {conversation.otherParticipant.profilePic ? (
-                        <img 
-                          src={conversation.otherParticipant.profilePic} 
-                          alt={conversation.otherParticipant.name} 
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <User size={24} className="text-text-secondary" />
-                      )}
-                    </div>
+                    <Link 
+                      to={`/profile/${conversation.otherParticipant._id || conversation.otherParticipant.id}`}
+                      className="block"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="h-12 w-12 rounded-full overflow-hidden bg-background-light flex items-center justify-center hover:ring-2 hover:ring-accent-pink transition-all">
+                        {conversation.otherParticipant.profilePic ? (
+                          <img 
+                            src={conversation.otherParticipant.profilePic} 
+                            alt={conversation.otherParticipant.name} 
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <User size={24} className="text-text-secondary" />
+                        )}
+                      </div>
+                    </Link>
                     {conversation.unreadCount > 0 && (
                       <div className="absolute -top-1 -right-1 h-5 w-5 bg-accent-pink rounded-full flex items-center justify-center">
                         <span className="text-xs text-white">{conversation.unreadCount}</span>
@@ -146,15 +152,30 @@ const Messages = () => {
                   </div>
                   <div className="ml-3 flex-1">
                     <div className="flex items-center justify-between">
-                      <h3 className="font-medium">{conversation.otherParticipant.name}</h3>
+                      <Link 
+                        to={`/profile/${conversation.otherParticipant._id || conversation.otherParticipant.id}`}
+                        className="font-medium hover:text-accent-pink transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {conversation.otherParticipant.name}
+                      </Link>
                       <span className="text-xs text-text-muted">
                         {formatDistanceToNow(new Date(conversation.lastMessage.createdAt), { addSuffix: true })}
                       </span>
                     </div>
-                    <p className="text-sm text-text-secondary truncate mt-1">
-                      {conversation.lastMessage.sender._id === user?.id ? 'You: ' : ''}
-                      {conversation.lastMessage.text}
-                    </p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-text-secondary truncate mt-1">
+                        {conversation.lastMessage.sender._id === user?.id ? 'You: ' : ''}
+                        {conversation.lastMessage.text}
+                      </p>
+                      <Link 
+                        to={`/profile/${conversation.otherParticipant._id || conversation.otherParticipant.id}`}
+                        className="text-xs text-accent-pink hover:underline ml-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        @{conversation.otherParticipant.username}
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </Link>

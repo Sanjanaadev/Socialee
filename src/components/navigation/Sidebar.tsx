@@ -21,6 +21,11 @@ const Sidebar = ({ onCloseSidebar }: SidebarProps) => {
     navigate('/');
   };
 
+  const handleUserClick = () => {
+    navigate('/profile');
+    if (onCloseSidebar) onCloseSidebar();
+  };
+
   return (
     <motion.div 
       className="h-full w-60 bg-background-dark border-r border-border flex flex-col"
@@ -98,7 +103,10 @@ const Sidebar = ({ onCloseSidebar }: SidebarProps) => {
 
       {/* User Section */}
       <div className="p-4 border-t border-border">
-        <div className="flex items-center">
+        <div 
+          className="flex items-center cursor-pointer hover:bg-background-light rounded-lg p-2 transition-colors"
+          onClick={handleUserClick}
+        >
           <div className="h-10 w-10 rounded-full overflow-hidden bg-background-light flex items-center justify-center">
             {user?.profilePic ? (
               <img 

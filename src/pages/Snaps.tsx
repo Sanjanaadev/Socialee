@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Camera, X, Heart, Smile, Laugh, Frown, ThumbsUp, Eye } from 'lucide-react';
+import { Plus, Camera, X, Heart, Smile, Laugh, Frown, ThumbsUp, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { snapsAPI } from '../services/api';
@@ -30,7 +30,7 @@ interface Snap {
 const Snaps = () => {
   const [userSnaps, setUserSnaps] = useState<Snap[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeSnap, setActiveSnap] = useState<Snap | null>(null);
+  const [activeSnapIndex, setActiveSnapIndex] = useState<number>(0);
   const [showSnapModal, setShowSnapModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -53,6 +53,24 @@ const Snaps = () => {
     loadSnaps();
   }, []);
 
+  // Handle keyboard navigation
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (!showSnapModal) return;
+      
+      if (e.key === 'ArrowLeft') {
+        handlePreviousSnap();
+      } else if (e.key === 'ArrowRight') {
+        handleNextSnap();
+      } else if (e.key === 'Escape') {
+        handleCloseSnap();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [showSnapModal, activeSnapIndex, userSnaps.length]);
+
   const loadSnaps = async () => {
     try {
       const snaps = await snapsAPI.getFeedSnaps();
@@ -65,8 +83,8 @@ const Snaps = () => {
     }
   };
 
-  const handleViewSnap = async (snap: Snap) => {
-    setActiveSnap(snap);
+  const handleViewSnap = async (snap: Snap, index: number) => {
+    setActiveSnapIndex(index);
     setShowSnapModal(true);
 
     // Mark snap as viewed
@@ -78,9 +96,28 @@ const Snaps = () => {
   };
 
   const handleCloseSnap = () => {
-    setActiveSnap(null);
     setShowSnapModal(false);
     setShowReactions(false);
+    setActiveSnapIndex(0);
+  };
+
+  const handleNextSnap = () => {
+    if (activeSnapIndex < userSnaps.length - 1) {
+      const nextIndex = activeSnapIndex + 1;
+      setActiveSnapIndex(nextIndex);
+      // Mark next snap as viewed
+      try {
+        snapsAPI.viewSnap(userSnaps[nextIndex]._id);
+      } catch (error) {
+        console.error('Error marking snap as viewed:', error);
+      }
+    }
+  };
+
+  const handlePreviousSnap = () => {
+    if (activeSnapIndex > 0) {
+      setActiveSnapIndex(activeSnapIndex - 1);
+    }
   };
 
   const handleCreateSnap = () => {
@@ -153,13 +190,13 @@ const Snaps = () => {
   };
 
   const handleReaction = async (reactionType: string) => {
+    const activeSnap = userSnaps[activeSnapIndex];
     if (!activeSnap || !user) return;
 
     try {
       const updatedSnap = await snapsAPI.reactToSnap(activeSnap._id, reactionType);
-      setActiveSnap(updatedSnap);
       setUserSnaps(prev => 
-        prev.map(snap => snap._id === activeSnap._id ? updatedSnap : snap)
+        prev.map((snap, index) => index === activeSnapIndex ? updatedSnap : snap)
       );
       setShowReactions(false);
       toast.success(`Reacted with ${reactionType}!`);
@@ -190,6 +227,8 @@ const Snaps = () => {
       </div>
     );
   }
+
+  const activeSnap = userSnaps[activeSnapIndex];
 
   return (
     <div>
@@ -232,7 +271,7 @@ const Snaps = () => {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.3, delay: index * 0.1 }}
-              onClick={() => handleViewSnap(snap)}
+              onClick={() => handleViewSnap(snap, index)}
             >
               <div className="relative h-full w-full">
                 {snap.mediaType === 'video' ? (
@@ -391,6 +430,43 @@ const Snaps = () => {
               exit={{ opacity: 0, scale: 0.9 }}
               onClick={(e) => e.stopPropagation()}
             >
+              {/* Navigation Arrows */}
+              {userSnaps.length > 1 && (
+                <>
+                  {activeSnapIndex > 0 && (
+                    <button
+                      onClick={handlePreviousSnap}
+                      className="absolute left-4 top-1/2 transform -translate-y-1/2 z-10 p-3 bg-black bg-opacity-50 rounded-full hover:bg-opacity-70 transition-all"
+                    >
+                      <ChevronLeft size={24} className="text-white" />
+                    </button>
+                  )}
+                  
+                  {activeSnapIndex < userSnaps.length - 1 && (
+                    <button
+                      onClick={handleNextSnap}
+                      className="absolute right-4 top-1/2 transform -translate-y-1/2 z-10 p-3 bg-black bg-opacity-50 rounded-full hover:bg-opacity-70 transition-all"
+                    >
+                      <ChevronRight size={24} className="text-white" />
+                    </button>
+                  )}
+                </>
+              )}
+
+              {/* Progress Indicators */}
+              {userSnaps.length > 1 && (
+                <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 flex space-x-2">
+                  {userSnaps.map((_, index) => (
+                    <div
+                      key={index}
+                      className={`h-1 w-8 rounded-full transition-all ${
+                        index === activeSnapIndex ? 'bg-white' : 'bg-white bg-opacity-30'
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
+
               {activeSnap.mediaType === 'video' ? (
                 <video 
                   src={activeSnap.mediaUrl} 
@@ -505,6 +581,14 @@ const Snaps = () => {
                   )}
                 </AnimatePresence>
               </div>
+
+              {/* Close button */}
+              <button
+                onClick={handleCloseSnap}
+                className="absolute top-4 right-4 z-10 p-2 bg-black bg-opacity-50 rounded-full hover:bg-opacity-70 transition-colors"
+              >
+                <X size={20} className="text-white" />
+              </button>
             </motion.div>
           </div>
         )}

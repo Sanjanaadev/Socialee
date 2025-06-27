@@ -4,6 +4,7 @@ const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
+const auth = require('../middleware/auth');
 
 // Signup route
 router.post('/signup', async (req, res) => {
@@ -198,6 +199,48 @@ router.post('/login', async (req, res) => {
     }
     
     res.status(500).json({ error: 'Error logging in: ' + err.message });
+  }
+});
+
+// Change password route
+router.put('/change-password', auth, async (req, res) => {
+  try {
+    console.log('🔐 Password change attempt for user:', req.userId);
+    
+    const { oldPassword, newPassword } = req.body;
+
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({ error: 'Old password and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters long' });
+    }
+
+    // Find user
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Check old password
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: 'Current password is incorrect' });
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedNewPassword = await bcrypt.hash(newPassword, salt);
+
+    // Update password
+    await User.findByIdAndUpdate(req.userId, { password: hashedNewPassword });
+
+    console.log('✅ Password changed successfully for user:', req.userId);
+    res.json({ message: 'Password changed successfully' });
+  } catch (err) {
+    console.error('❌ Password change error:', err);
+    res.status(500).json({ error: 'Error changing password: ' + err.message });
   }
 });
 

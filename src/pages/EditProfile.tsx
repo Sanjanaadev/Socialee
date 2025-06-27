@@ -30,6 +30,7 @@ const EditProfile = () => {
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const handleProfilePicChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -76,8 +77,8 @@ const EditProfile = () => {
       await updateProfile(updatedData);
       toast.success('Profile updated successfully!');
       navigate('/profile');
-    } catch (error) {
-      toast.error('Failed to update profile');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update profile');
     } finally {
       setIsLoading(false);
     }
@@ -91,11 +92,12 @@ const EditProfile = () => {
       return;
     }
 
-    if (passwordData.newPassword.length < 8) {
-      toast.error('Password must be at least 8 characters long');
+    if (passwordData.newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters long');
       return;
     }
 
+    setIsChangingPassword(true);
     try {
       await updatePassword(passwordData.oldPassword, passwordData.newPassword);
       toast.success('Password changed successfully!');
@@ -103,6 +105,8 @@ const EditProfile = () => {
       setPasswordData({ oldPassword: '', newPassword: '', confirmPassword: '' });
     } catch (error: any) {
       toast.error(error.message || 'Failed to change password');
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -270,7 +274,7 @@ const EditProfile = () => {
                   value={passwordData.newPassword}
                   onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
                   required
-                  minLength={8}
+                  minLength={6}
                 />
               </div>
 
@@ -292,11 +296,16 @@ const EditProfile = () => {
                   type="button"
                   className="btn-outline"
                   onClick={() => setShowPasswordModal(false)}
+                  disabled={isChangingPassword}
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary">
-                  Change Password
+                <button 
+                  type="submit" 
+                  className="btn-primary"
+                  disabled={isChangingPassword}
+                >
+                  {isChangingPassword ? 'Changing...' : 'Change Password'}
                 </button>
               </div>
             </form>
