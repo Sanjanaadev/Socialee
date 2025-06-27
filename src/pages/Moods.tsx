@@ -1,9 +1,21 @@
 import { useState, useEffect } from 'react';
-import { Heart, Send, Trash2 } from 'lucide-react';
+import { Heart, Send, Trash2, MessageCircle, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
+
+interface MoodComment {
+  _id: string;
+  text: string;
+  author: {
+    _id: string;
+    name: string;
+    username: string;
+    profilePic?: string;
+  };
+  createdAt: string;
+}
 
 interface Mood {
   _id: string;
@@ -20,6 +32,8 @@ interface Mood {
   backgroundColor: string;
   textColor: string;
   createdAt: string;
+  comments?: MoodComment[];
+  commentsCount?: number;
 }
 
 const Moods = () => {
@@ -29,16 +43,17 @@ const Moods = () => {
   const [selectedMoodType, setSelectedMoodType] = useState('neutral');
   const [selectedBgColor, setSelectedBgColor] = useState('#FF2E93');
   const [isCreating, setIsCreating] = useState(false);
+  const [newComments, setNewComments] = useState<{ [key: string]: string }>({});
   const { user } = useAuth();
 
   const moodTypes = [
-    { value: 'happy', label: '😊 Happy', color: '#4CAF50' },
-    { value: 'sad', label: '😢 Sad', color: '#2196F3' },
-    { value: 'excited', label: '🎉 Excited', color: '#FF9800' },
-    { value: 'angry', label: '😠 Angry', color: '#F44336' },
-    { value: 'love', label: '❤️ Love', color: '#E91E63' },
-    { value: 'surprised', label: '😲 Surprised', color: '#9C27B0' },
-    { value: 'neutral', label: '😐 Neutral', color: '#FF2E93' },
+    { value: 'happy', label: '😊 Happy', emoji: '😊', color: '#4CAF50' },
+    { value: 'sad', label: '😢 Sad', emoji: '😢', color: '#2196F3' },
+    { value: 'excited', label: '🎉 Excited', emoji: '🎉', color: '#FF9800' },
+    { value: 'angry', label: '😠 Angry', emoji: '😠', color: '#F44336' },
+    { value: 'love', label: '❤️ Love', emoji: '❤️', color: '#E91E63' },
+    { value: 'surprised', label: '😲 Surprised', emoji: '😲', color: '#9C27B0' },
+    { value: 'neutral', label: '😐 Neutral', emoji: '😐', color: '#FF2E93' },
   ];
 
   useEffect(() => {
@@ -153,6 +168,52 @@ const Moods = () => {
     }
   };
 
+  const handleComment = async (moodId: string) => {
+    if (!newComments[moodId]?.trim() || !user) return;
+
+    try {
+      const token = localStorage.getItem('socialee_token');
+      if (!token) {
+        toast.error('Please log in to comment');
+        return;
+      }
+
+      const response = await fetch(`http://localhost:5000/api/moods/${moodId}/comments`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text: newComments[moodId].trim() }),
+      });
+
+      if (response.ok) {
+        const comment = await response.json();
+        
+        setUserMoods(prevMoods =>
+          prevMoods.map(mood =>
+            mood._id === moodId
+              ? { 
+                  ...mood, 
+                  comments: [...(mood.comments || []), comment],
+                  commentsCount: (mood.commentsCount || 0) + 1
+                }
+              : mood
+          )
+        );
+
+        setNewComments(prev => ({ ...prev, [moodId]: '' }));
+        toast.success('Comment added!');
+      } else {
+        const error = await response.json();
+        toast.error(error.error || 'Failed to add comment');
+      }
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      toast.error('Failed to add comment');
+    }
+  };
+
   const handleDeleteMood = async (moodId: string) => {
     if (!confirm('Are you sure you want to delete this mood?')) return;
 
@@ -178,6 +239,11 @@ const Moods = () => {
       console.error('Error deleting mood:', error);
       toast.error('Failed to delete mood');
     }
+  };
+
+  const getMoodEmoji = (moodType: string) => {
+    const mood = moodTypes.find(m => m.value === moodType);
+    return mood ? mood.emoji : '😐';
   };
 
   if (isLoading) {
@@ -279,9 +345,7 @@ const Moods = () => {
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <span className="font-medium text-text-primary">
-                        {mood.author.name.charAt(0).toUpperCase()}
-                      </span>
+                      <User size={20} className="text-text-primary" />
                     )}
                   </div>
                   <div className="ml-3">
@@ -303,8 +367,15 @@ const Moods = () => {
                   </button>
                 )}
               </div>
-              <p className="mb-3" style={{ color: mood.textColor }}>{mood.text}</p>
-              <div className="flex items-center">
+              
+              {/* Mood text with emoji */}
+              <div className="mb-3 flex items-start gap-2">
+                <span className="text-2xl">{getMoodEmoji(mood.mood)}</span>
+                <p style={{ color: mood.textColor }} className="flex-1">{mood.text}</p>
+              </div>
+              
+              {/* Actions */}
+              <div className="flex items-center gap-4 mb-3">
                 <button 
                   className="flex items-center gap-1 hover:opacity-80 transition-opacity"
                   style={{ color: mood.textColor }}
@@ -315,6 +386,65 @@ const Moods = () => {
                     fill={mood.likes.includes(user?.id || '') ? 'currentColor' : 'none'}
                   />
                   <span className="text-sm">{mood.likesCount || 0}</span>
+                </button>
+                
+                <div className="flex items-center gap-1" style={{ color: mood.textColor }}>
+                  <MessageCircle size={18} />
+                  <span className="text-sm">{mood.commentsCount || mood.comments?.length || 0}</span>
+                </div>
+              </div>
+
+              {/* Comments */}
+              {mood.comments && mood.comments.length > 0 && (
+                <div className="space-y-2 mb-3">
+                  {mood.comments.map(comment => (
+                    <div key={comment._id} className="flex items-start space-x-2">
+                      <div className="h-6 w-6 rounded-full overflow-hidden bg-background-light flex items-center justify-center">
+                        {comment.author.profilePic ? (
+                          <img 
+                            src={comment.author.profilePic} 
+                            alt={comment.author.name} 
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <User size={12} className="text-text-primary" />
+                        )}
+                      </div>
+                      <div className="flex-1 bg-black bg-opacity-20 rounded-lg p-2">
+                        <p className="text-sm" style={{ color: mood.textColor }}>
+                          <span className="font-medium">{comment.author.name}</span>{' '}
+                          {comment.text}
+                        </p>
+                        <p className="text-xs opacity-75 mt-1" style={{ color: mood.textColor }}>
+                          {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add Comment */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  className="flex-1 bg-black bg-opacity-20 text-white placeholder-gray-300 border border-white border-opacity-30 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
+                  placeholder="Add a comment..."
+                  value={newComments[mood._id] || ''}
+                  onChange={(e) => setNewComments(prev => ({ ...prev, [mood._id]: e.target.value }))}
+                  onKeyPress={(e) => e.key === 'Enter' && handleComment(mood._id)}
+                  style={{ 
+                    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+                    color: mood.textColor,
+                    borderColor: `${mood.textColor}50`
+                  }}
+                />
+                <button
+                  className="p-2 rounded-full hover:bg-black hover:bg-opacity-20 transition-colors"
+                  style={{ color: mood.textColor }}
+                  onClick={() => handleComment(mood._id)}
+                >
+                  <Send size={16} />
                 </button>
               </div>
             </motion.div>

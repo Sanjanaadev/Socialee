@@ -1,5 +1,21 @@
 const mongoose = require('mongoose');
 
+const commentSchema = new mongoose.Schema({
+  text: {
+    type: String,
+    required: true,
+    trim: true,
+    maxlength: 500
+  },
+  author: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  }
+}, {
+  timestamps: true
+});
+
 const moodSchema = new mongoose.Schema({
   text: {
     type: String,
@@ -16,6 +32,7 @@ const moodSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
+  comments: [commentSchema],
   mood: {
     type: String,
     enum: ['happy', 'sad', 'excited', 'angry', 'love', 'surprised', 'neutral'],
@@ -40,6 +57,11 @@ moodSchema.index({ createdAt: -1 });
 // Virtual for likes count
 moodSchema.virtual('likesCount').get(function() {
   return this.likes.length;
+});
+
+// Virtual for comments count
+moodSchema.virtual('commentsCount').get(function() {
+  return this.comments.length;
 });
 
 // Ensure virtual fields are serialized

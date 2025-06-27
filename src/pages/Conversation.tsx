@@ -144,12 +144,15 @@ const Conversation = () => {
 
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col">
-      {/* Header */}
+      {/* Header with clickable profile navigation */}
       <div className="flex items-center border-b border-border pb-4 mb-4">
         <Link to="/messages" className="mr-3 p-2 rounded-full hover:bg-background-light">
           <ArrowLeft size={20} />
         </Link>
-        <div className="flex items-center">
+        <Link 
+          to={`/profile/${otherUser.id}`}
+          className="flex items-center hover:bg-background-light rounded-lg p-2 transition-colors flex-1"
+        >
           <div className="h-10 w-10 rounded-full overflow-hidden bg-background-light flex items-center justify-center">
             {otherUser.profilePic ? (
               <img 
@@ -162,10 +165,10 @@ const Conversation = () => {
             )}
           </div>
           <div className="ml-3">
-            <h2 className="font-medium">{otherUser.name}</h2>
+            <h2 className="font-medium hover:text-accent-pink transition-colors">{otherUser.name}</h2>
             <p className="text-xs text-text-muted">@{otherUser.username}</p>
           </div>
-        </div>
+        </Link>
       </div>
       
       {/* Messages */}

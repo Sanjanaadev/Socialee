@@ -52,21 +52,26 @@ const notifyFollowersOfNewPost = async (authorId, postId, postType = 'post') => 
 };
 
 // Create notification for post interaction
-const notifyPostInteraction = async (postAuthorId, senderId, type, postId, senderName) => {
+const notifyPostInteraction = async (postAuthorId, senderId, type, postId, senderName, extraData = {}) => {
   try {
     let message = '';
     switch (type) {
       case 'like':
-        message = `${senderName} liked your post`;
+        message = `${senderName} liked your ${extraData.relatedMood ? 'mood' : 'post'}`;
         break;
       case 'comment':
-        message = `${senderName} commented on your post`;
+        message = `${senderName} commented on your ${extraData.relatedMood ? 'mood' : 'post'}`;
         break;
       default:
-        message = `${senderName} interacted with your post`;
+        message = `${senderName} interacted with your ${extraData.relatedMood ? 'mood' : 'post'}`;
     }
 
-    await createNotification(postAuthorId, senderId, type, message, { relatedPost: postId });
+    const notificationData = {
+      ...(postId && { relatedPost: postId }),
+      ...extraData
+    };
+
+    await createNotification(postAuthorId, senderId, type, message, notificationData);
   } catch (error) {
     console.error('Error creating post interaction notification:', error);
   }

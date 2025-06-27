@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Camera, X, Heart, Smile, Laugh, Frown, ThumbsUp, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Camera, X, Heart, Smile, Laugh, Frown, ThumbsUp, Eye, ChevronLeft, ChevronRight, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { snapsAPI } from '../services/api';
@@ -27,9 +27,22 @@ interface Snap {
   }>;
 }
 
+interface GroupedSnaps {
+  author: {
+    _id: string;
+    name: string;
+    username: string;
+    profilePic?: string;
+  };
+  snaps: Snap[];
+  hasUnviewed: boolean;
+}
+
 const Snaps = () => {
   const [userSnaps, setUserSnaps] = useState<Snap[]>([]);
+  const [groupedSnaps, setGroupedSnaps] = useState<GroupedSnaps[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeGroupIndex, setActiveGroupIndex] = useState<number>(0);
   const [activeSnapIndex, setActiveSnapIndex] = useState<number>(0);
   const [showSnapModal, setShowSnapModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -69,12 +82,16 @@ const Snaps = () => {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [showSnapModal, activeSnapIndex, userSnaps.length]);
+  }, [showSnapModal, activeGroupIndex, activeSnapIndex, groupedSnaps.length]);
 
   const loadSnaps = async () => {
     try {
       const snaps = await snapsAPI.getFeedSnaps();
       setUserSnaps(snaps);
+      
+      // Group snaps by author
+      const grouped = groupSnapsByAuthor(snaps);
+      setGroupedSnaps(grouped);
     } catch (error) {
       console.error('Error loading snaps:', error);
       toast.error('Failed to load snaps');
@@ -83,13 +100,37 @@ const Snaps = () => {
     }
   };
 
-  const handleViewSnap = async (snap: Snap, index: number) => {
-    setActiveSnapIndex(index);
+  const groupSnapsByAuthor = (snaps: Snap[]): GroupedSnaps[] => {
+    const groups: { [key: string]: GroupedSnaps } = {};
+    
+    snaps.forEach(snap => {
+      const authorId = snap.author._id;
+      if (!groups[authorId]) {
+        groups[authorId] = {
+          author: snap.author,
+          snaps: [],
+          hasUnviewed: false
+        };
+      }
+      groups[authorId].snaps.push(snap);
+      // For now, we'll assume all snaps are unviewed - in a real app, you'd track this
+      groups[authorId].hasUnviewed = true;
+    });
+
+    return Object.values(groups).sort((a, b) => 
+      new Date(b.snaps[0].createdAt).getTime() - new Date(a.snaps[0].createdAt).getTime()
+    );
+  };
+
+  const handleViewSnapGroup = async (groupIndex: number) => {
+    setActiveGroupIndex(groupIndex);
+    setActiveSnapIndex(0);
     setShowSnapModal(true);
 
-    // Mark snap as viewed
+    // Mark first snap as viewed
+    const firstSnap = groupedSnaps[groupIndex].snaps[0];
     try {
-      await snapsAPI.viewSnap(snap._id);
+      await snapsAPI.viewSnap(firstSnap._id);
     } catch (error) {
       console.error('Error marking snap as viewed:', error);
     }
@@ -98,16 +139,28 @@ const Snaps = () => {
   const handleCloseSnap = () => {
     setShowSnapModal(false);
     setShowReactions(false);
+    setActiveGroupIndex(0);
     setActiveSnapIndex(0);
   };
 
   const handleNextSnap = () => {
-    if (activeSnapIndex < userSnaps.length - 1) {
-      const nextIndex = activeSnapIndex + 1;
-      setActiveSnapIndex(nextIndex);
+    const currentGroup = groupedSnaps[activeGroupIndex];
+    if (activeSnapIndex < currentGroup.snaps.length - 1) {
+      const nextSnapIndex = activeSnapIndex + 1;
+      setActiveSnapIndex(nextSnapIndex);
       // Mark next snap as viewed
       try {
-        snapsAPI.viewSnap(userSnaps[nextIndex]._id);
+        snapsAPI.viewSnap(currentGroup.snaps[nextSnapIndex]._id);
+      } catch (error) {
+        console.error('Error marking snap as viewed:', error);
+      }
+    } else if (activeGroupIndex < groupedSnaps.length - 1) {
+      // Move to next group
+      const nextGroupIndex = activeGroupIndex + 1;
+      setActiveGroupIndex(nextGroupIndex);
+      setActiveSnapIndex(0);
+      try {
+        snapsAPI.viewSnap(groupedSnaps[nextGroupIndex].snaps[0]._id);
       } catch (error) {
         console.error('Error marking snap as viewed:', error);
       }
@@ -117,6 +170,12 @@ const Snaps = () => {
   const handlePreviousSnap = () => {
     if (activeSnapIndex > 0) {
       setActiveSnapIndex(activeSnapIndex - 1);
+    } else if (activeGroupIndex > 0) {
+      // Move to previous group, last snap
+      const prevGroupIndex = activeGroupIndex - 1;
+      const prevGroup = groupedSnaps[prevGroupIndex];
+      setActiveGroupIndex(prevGroupIndex);
+      setActiveSnapIndex(prevGroup.snaps.length - 1);
     }
   };
 
@@ -166,6 +225,11 @@ const Snaps = () => {
       const newSnap = await snapsAPI.createSnap(snapData);
       setUserSnaps(prev => [newSnap, ...prev]);
       
+      // Reload grouped snaps
+      const updatedSnaps = [newSnap, ...userSnaps];
+      const grouped = groupSnapsByAuthor(updatedSnaps);
+      setGroupedSnaps(grouped);
+      
       // Close modal and reset state
       setShowCreateModal(false);
       setSelectedFile(null);
@@ -190,14 +254,31 @@ const Snaps = () => {
   };
 
   const handleReaction = async (reactionType: string) => {
-    const activeSnap = userSnaps[activeSnapIndex];
+    const activeGroup = groupedSnaps[activeGroupIndex];
+    const activeSnap = activeGroup.snaps[activeSnapIndex];
     if (!activeSnap || !user) return;
 
     try {
       const updatedSnap = await snapsAPI.reactToSnap(activeSnap._id, reactionType);
+      
+      // Update the snap in both arrays
       setUserSnaps(prev => 
-        prev.map((snap, index) => index === activeSnapIndex ? updatedSnap : snap)
+        prev.map(snap => snap._id === activeSnap._id ? updatedSnap : snap)
       );
+      
+      setGroupedSnaps(prev => 
+        prev.map((group, groupIdx) => 
+          groupIdx === activeGroupIndex 
+            ? {
+                ...group,
+                snaps: group.snaps.map((snap, snapIdx) => 
+                  snapIdx === activeSnapIndex ? updatedSnap : snap
+                )
+              }
+            : group
+        )
+      );
+      
       setShowReactions(false);
       toast.success(`Reacted with ${reactionType}!`);
     } catch (error: any) {
@@ -228,7 +309,8 @@ const Snaps = () => {
     );
   }
 
-  const activeSnap = userSnaps[activeSnapIndex];
+  const activeGroup = groupedSnaps[activeGroupIndex];
+  const activeSnap = activeGroup?.snaps[activeSnapIndex];
 
   return (
     <div>
@@ -253,8 +335,8 @@ const Snaps = () => {
           <p className="text-sm text-text-secondary">Add Snap</p>
         </motion.div>
         
-        {/* User snaps */}
-        {userSnaps.length === 0 ? (
+        {/* Grouped snaps */}
+        {groupedSnaps.length === 0 ? (
           <div className="col-span-full text-center py-16">
             <h2 className="text-xl font-bold mb-4">No Snaps Yet</h2>
             <p className="text-text-secondary mb-6">
@@ -262,58 +344,71 @@ const Snaps = () => {
             </p>
           </div>
         ) : (
-          userSnaps.map((snap, index) => (
+          groupedSnaps.map((group, groupIndex) => (
             <motion.div
-              key={snap._id}
-              className="aspect-square rounded-lg overflow-hidden cursor-pointer"
+              key={group.author._id}
+              className="aspect-square rounded-lg overflow-hidden cursor-pointer relative"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3, delay: index * 0.1 }}
-              onClick={() => handleViewSnap(snap, index)}
+              transition={{ duration: 0.3, delay: groupIndex * 0.1 }}
+              onClick={() => handleViewSnapGroup(groupIndex)}
             >
               <div className="relative h-full w-full">
-                {snap.mediaType === 'video' ? (
+                {/* Show the latest snap as preview */}
+                {group.snaps[0].mediaType === 'video' ? (
                   <video 
-                    src={snap.mediaUrl} 
+                    src={group.snaps[0].mediaUrl} 
                     className="h-full w-full object-cover"
                     muted
                   />
                 ) : (
                   <img 
-                    src={snap.mediaUrl} 
+                    src={group.snaps[0].mediaUrl} 
                     alt="Snap" 
                     className="h-full w-full object-cover"
                   />
                 )}
+                
+                {/* Snap count indicator */}
+                {group.snaps.length > 1 && (
+                  <div className="absolute top-2 right-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded-full">
+                    {group.snaps.length}
+                  </div>
+                )}
+                
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <div className="h-6 w-6 rounded-full overflow-hidden bg-background-light flex items-center justify-center border border-white">
-                        {snap.author.profilePic ? (
+                        {group.author.profilePic ? (
                           <img 
-                            src={snap.author.profilePic} 
-                            alt={snap.author.name} 
+                            src={group.author.profilePic} 
+                            alt={group.author.name} 
                             className="h-full w-full object-cover"
                           />
                         ) : (
-                          <span className="text-xs font-medium text-white">
-                            {snap.author.name.charAt(0).toUpperCase()}
-                          </span>
+                          <User size={12} className="text-text-secondary" />
                         )}
                       </div>
                       <span className="ml-1 text-xs text-white truncate">
-                        {snap.author._id === user?.id ? 'You' : snap.author.name}
+                        {group.author._id === user?.id ? 'You' : group.author.name}
                       </span>
                     </div>
                     <div className="flex items-center space-x-1">
                       <Eye size={12} className="text-white" />
-                      <span className="text-xs text-white">{snap.viewsCount}</span>
+                      <span className="text-xs text-white">{group.snaps[0].viewsCount}</span>
                     </div>
                   </div>
                 </div>
-                <div className="absolute inset-0 ring-2 ring-accent-pink ring-offset-0 rounded-lg"></div>
+                
+                {/* Ring indicator for unviewed snaps */}
+                <div className={`absolute inset-0 rounded-lg ${
+                  group.hasUnviewed 
+                    ? 'ring-2 ring-accent-pink ring-offset-0' 
+                    : 'ring-2 ring-gray-500 ring-offset-0'
+                }`}></div>
               </div>
             </motion.div>
           ))
@@ -421,7 +516,7 @@ const Snaps = () => {
 
       {/* Snap Viewer Modal */}
       <AnimatePresence>
-        {showSnapModal && activeSnap && (
+        {showSnapModal && activeSnap && activeGroup && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-90" onClick={handleCloseSnap}>
             <motion.div 
               className="max-w-lg w-full h-[70vh] relative"
@@ -431,32 +526,28 @@ const Snaps = () => {
               onClick={(e) => e.stopPropagation()}
             >
               {/* Navigation Arrows */}
-              {userSnaps.length > 1 && (
-                <>
-                  {activeSnapIndex > 0 && (
-                    <button
-                      onClick={handlePreviousSnap}
-                      className="absolute left-4 top-1/2 transform -translate-y-1/2 z-10 p-3 bg-black bg-opacity-50 rounded-full hover:bg-opacity-70 transition-all"
-                    >
-                      <ChevronLeft size={24} className="text-white" />
-                    </button>
-                  )}
-                  
-                  {activeSnapIndex < userSnaps.length - 1 && (
-                    <button
-                      onClick={handleNextSnap}
-                      className="absolute right-4 top-1/2 transform -translate-y-1/2 z-10 p-3 bg-black bg-opacity-50 rounded-full hover:bg-opacity-70 transition-all"
-                    >
-                      <ChevronRight size={24} className="text-white" />
-                    </button>
-                  )}
-                </>
+              {(activeSnapIndex > 0 || activeGroupIndex > 0) && (
+                <button
+                  onClick={handlePreviousSnap}
+                  className="absolute left-4 top-1/2 transform -translate-y-1/2 z-10 p-3 bg-black bg-opacity-50 rounded-full hover:bg-opacity-70 transition-all"
+                >
+                  <ChevronLeft size={24} className="text-white" />
+                </button>
+              )}
+              
+              {(activeSnapIndex < activeGroup.snaps.length - 1 || activeGroupIndex < groupedSnaps.length - 1) && (
+                <button
+                  onClick={handleNextSnap}
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 z-10 p-3 bg-black bg-opacity-50 rounded-full hover:bg-opacity-70 transition-all"
+                >
+                  <ChevronRight size={24} className="text-white" />
+                </button>
               )}
 
-              {/* Progress Indicators */}
-              {userSnaps.length > 1 && (
+              {/* Progress Indicators for current group */}
+              {activeGroup.snaps.length > 1 && (
                 <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 flex space-x-2">
-                  {userSnaps.map((_, index) => (
+                  {activeGroup.snaps.map((_, index) => (
                     <div
                       key={index}
                       className={`h-1 w-8 rounded-full transition-all ${
@@ -494,9 +585,7 @@ const Snaps = () => {
                           className="h-full w-full object-cover"
                         />
                       ) : (
-                        <span className="text-sm font-medium text-white">
-                          {activeSnap.author.name.charAt(0).toUpperCase()}
-                        </span>
+                        <User size={16} className="text-text-secondary" />
                       )}
                     </div>
                     <div className="ml-2">
