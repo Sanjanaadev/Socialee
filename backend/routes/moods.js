@@ -110,12 +110,15 @@ router.post('/:moodId/like', auth, async (req, res) => {
     
     if (isLiked) {
       mood.likes = mood.likes.filter(id => id.toString() !== userId);
+      console.log('👎 Mood unliked');
     } else {
       mood.likes.push(userId);
+      console.log('👍 Mood liked');
       
       // Create notification for mood author (only when liking, not unliking)
       if (mood.author.toString() !== userId) {
         const user = await User.findById(userId);
+        console.log('📢 Creating like notification for mood author:', mood.author);
         await notifyPostInteraction(mood.author, userId, 'like', null, user.name, { relatedMood: moodId });
       }
     }
@@ -177,6 +180,7 @@ router.post('/:moodId/comments', auth, async (req, res) => {
     // Create notification for mood author
     if (mood.author._id.toString() !== userId) {
       const user = await User.findById(userId);
+      console.log('📢 Creating comment notification for mood author:', mood.author._id);
       await notifyPostInteraction(mood.author._id, userId, 'comment', null, user.name, { relatedMood: moodId });
     }
     

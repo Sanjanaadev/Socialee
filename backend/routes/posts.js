@@ -109,12 +109,15 @@ router.post('/:postId/like', auth, async (req, res) => {
     
     if (isLiked) {
       post.likes = post.likes.filter(id => id.toString() !== userId);
+      console.log('👎 Post unliked');
     } else {
       post.likes.push(userId);
+      console.log('👍 Post liked');
       
       // Create notification for post author (only when liking, not unliking)
       if (post.author.toString() !== userId) {
         const user = await User.findById(userId);
+        console.log('📢 Creating like notification for post author:', post.author);
         await notifyPostInteraction(post.author, userId, 'like', postId, user.name);
       }
     }
@@ -170,6 +173,7 @@ router.post('/:postId/comments', auth, async (req, res) => {
     // Create notification for post author
     if (post.author.toString() !== userId) {
       const user = await User.findById(userId);
+      console.log('📢 Creating comment notification for post author:', post.author);
       await notifyPostInteraction(post.author, userId, 'comment', postId, user.name);
     }
     

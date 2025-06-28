@@ -9,6 +9,24 @@ const createNotification = async (recipientId, senderId, type, message, relatedD
       return null;
     }
 
+    // Check if a similar notification already exists (to avoid spam)
+    const existingNotification = await Notification.findOne({
+      recipient: recipientId,
+      sender: senderId,
+      type,
+      ...relatedData,
+      createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Within last 24 hours
+    });
+
+    if (existingNotification && ['like'].includes(type)) {
+      // Update existing like notification instead of creating new one
+      existingNotification.createdAt = new Date();
+      existingNotification.read = false;
+      await existingNotification.save();
+      console.log(`📢 Updated existing ${type} notification for user ${recipientId}`);
+      return existingNotification;
+    }
+
     const notificationData = {
       recipient: recipientId,
       sender: senderId,
@@ -20,7 +38,7 @@ const createNotification = async (recipientId, senderId, type, message, relatedD
     const notification = new Notification(notificationData);
     await notification.save();
     
-    console.log(`📢 Notification created: ${type} for user ${recipientId}`);
+    console.log(`📢 Notification created: ${type} for user ${recipientId} - ${message}`);
     return notification;
   } catch (error) {
     console.error('Error creating notification:', error);
@@ -31,7 +49,7 @@ const createNotification = async (recipientId, senderId, type, message, relatedD
 // Create notifications for followers when user posts
 const notifyFollowersOfNewPost = async (authorId, postId, postType = 'post') => {
   try {
-    const author = await User.findById(authorId).populate('followers', '_id');
+    const author = await User.findById(authorId).populate('followers', '_id name');
     if (!author || !author.followers.length) {
       console.log('No followers to notify for new post');
       return;
@@ -59,6 +77,11 @@ const notifyFollowersOfNewPost = async (authorId, postId, postType = 'post') => 
 // Create notification for post interaction
 const notifyPostInteraction = async (postAuthorId, senderId, type, postId, senderName, extraData = {}) => {
   try {
+    // Don't notify if user is interacting with their own content
+    if (postAuthorId.toString() === senderId.toString()) {
+      return;
+    }
+
     let message = '';
     switch (type) {
       case 'like':
@@ -89,7 +112,7 @@ const notifyPostInteraction = async (postAuthorId, senderId, type, postId, sende
     };
 
     await createNotification(postAuthorId, senderId, type, message, notificationData);
-    console.log(`📢 Created ${type} notification for ${postAuthorId}`);
+    console.log(`📢 Created ${type} notification for ${postAuthorId}: ${message}`);
   } catch (error) {
     console.error('Error creating post interaction notification:', error);
   }

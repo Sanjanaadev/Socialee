@@ -128,6 +128,7 @@ router.post('/:userId/follow', auth, async (req, res) => {
     });
 
     // Create notification for followed user
+    console.log('📢 Creating follow notification for user:', userId);
     await notifyFollow(userId, currentUserId, currentUser.name);
 
     console.log('✅ User followed successfully');

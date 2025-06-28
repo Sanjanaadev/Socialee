@@ -21,6 +21,20 @@ interface Notification {
     username: string;
     profilePic?: string;
   };
+  relatedPost?: {
+    _id: string;
+    imageUrl: string;
+    caption: string;
+  };
+  relatedSnap?: {
+    _id: string;
+    mediaUrl: string;
+    caption?: string;
+  };
+  relatedMood?: {
+    _id: string;
+    text: string;
+  };
   read: boolean;
   createdAt: string;
 }
@@ -77,12 +91,14 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
       // Set up polling for real-time updates
       const interval = setInterval(() => {
         loadUnreadCounts();
-        loadNotifications(); // Also refresh notifications
+        if (!showNotifications) {
+          loadNotifications(); // Only refresh notifications if dropdown is closed
+        }
       }, 10000); // Check every 10 seconds
 
       return () => clearInterval(interval);
     }
-  }, [user]);
+  }, [user, showNotifications]);
 
   // Update unread message count when navigating away from messages
   useEffect(() => {
@@ -94,6 +110,7 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
   const loadNotifications = async () => {
     try {
       const notificationsData = await notificationsAPI.getNotifications();
+      console.log('Loaded notifications:', notificationsData);
       setNotifications(notificationsData);
     } catch (error) {
       console.error('Error loading notifications:', error);
@@ -176,6 +193,16 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
       case 'snap':
         window.location.href = `/snaps`;
         break;
+      case 'like':
+      case 'comment':
+        if (notification.relatedMood) {
+          window.location.href = `/moods`;
+        } else if (notification.relatedSnap) {
+          window.location.href = `/snaps`;
+        } else {
+          window.location.href = `/home`;
+        }
+        break;
       default:
         // For post notifications, go to home feed
         window.location.href = `/home`;
@@ -192,6 +219,54 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
     }
+  };
+
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'like':
+        return '❤️';
+      case 'comment':
+        return '💬';
+      case 'follow':
+        return '👤';
+      case 'message':
+        return '📩';
+      case 'post':
+        return '📸';
+      case 'snap':
+        return '⚡';
+      case 'mood':
+        return '💭';
+      default:
+        return '🔔';
+    }
+  };
+
+  const getNotificationPreview = (notification: Notification) => {
+    if (notification.relatedPost) {
+      return (
+        <div className="flex items-center mt-1">
+          <img 
+            src={notification.relatedPost.imageUrl} 
+            alt="Post" 
+            className="w-8 h-8 rounded object-cover mr-2"
+          />
+          <span className="text-xs text-text-muted truncate">
+            {notification.relatedPost.caption}
+          </span>
+        </div>
+      );
+    }
+    if (notification.relatedMood) {
+      return (
+        <div className="mt-1">
+          <span className="text-xs text-text-muted">
+            "{notification.relatedMood.text.substring(0, 50)}..."
+          </span>
+        </div>
+      );
+    }
+    return null;
   };
 
   return (
@@ -308,7 +383,7 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="absolute right-0 mt-2 w-80 bg-background-card rounded-lg shadow-lg border border-border z-50"
+                className="absolute right-0 mt-2 w-96 bg-background-card rounded-lg shadow-lg border border-border z-50"
               >
                 <div className="px-4 py-3 border-b border-border flex items-center justify-between">
                   <h3 className="font-medium">Notifications</h3>
@@ -324,20 +399,24 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
                 <div className="max-h-96 overflow-y-auto">
                   {notifications.length === 0 ? (
                     <div className="px-4 py-8 text-center text-text-secondary">
-                      No notifications yet
+                      <Bell size={48} className="mx-auto mb-4 text-text-muted" />
+                      <h3 className="font-medium mb-2">No notifications yet</h3>
+                      <p className="text-sm">When someone likes your posts or follows you, you'll see it here.</p>
                     </div>
                   ) : (
                     <div className="py-2">
-                      {notifications.slice(0, 10).map((notification) => (
+                      {notifications.slice(0, 15).map((notification) => (
                         <div
                           key={notification._id}
-                          className={`px-4 py-3 hover:bg-background-light cursor-pointer transition-colors ${
-                            !notification.read ? 'bg-accent-pink bg-opacity-5' : ''
+                          className={`px-4 py-3 hover:bg-background-light cursor-pointer transition-colors border-l-4 ${
+                            !notification.read 
+                              ? 'bg-accent-pink bg-opacity-5 border-l-accent-pink' 
+                              : 'border-l-transparent'
                           }`}
                           onClick={() => handleNotificationClick(notification)}
                         >
                           <div className="flex items-start space-x-3">
-                            <div className="h-8 w-8 rounded-full overflow-hidden bg-background-light flex items-center justify-center">
+                            <div className="h-10 w-10 rounded-full overflow-hidden bg-background-light flex items-center justify-center relative">
                               {notification.sender.profilePic ? (
                                 <img 
                                   src={notification.sender.profilePic} 
@@ -345,23 +424,37 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
                                   className="h-full w-full object-cover"
                                 />
                               ) : (
-                                <User size={16} className="text-text-secondary" />
+                                <User size={20} className="text-text-secondary" />
                               )}
+                              {/* Notification type icon */}
+                              <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-background-card rounded-full flex items-center justify-center text-xs border border-border">
+                                {getNotificationIcon(notification.type)}
+                              </div>
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm text-text-primary">
-                                {notification.message}
-                              </p>
-                              <p className="text-xs text-text-secondary mt-1">
+                              <div className="flex items-center justify-between">
+                                <p className={`text-sm ${!notification.read ? 'font-medium text-text-primary' : 'text-text-secondary'}`}>
+                                  {notification.message}
+                                </p>
+                                {!notification.read && (
+                                  <div className="h-2 w-2 rounded-full bg-accent-pink ml-2 flex-shrink-0"></div>
+                                )}
+                              </div>
+                              <p className="text-xs text-text-muted mt-1">
                                 {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
                               </p>
+                              {getNotificationPreview(notification)}
                             </div>
-                            {!notification.read && (
-                              <div className="h-2 w-2 rounded-full bg-accent-pink"></div>
-                            )}
                           </div>
                         </div>
                       ))}
+                      {notifications.length > 15 && (
+                        <div className="px-4 py-3 text-center border-t border-border">
+                          <button className="text-sm text-accent-pink hover:underline">
+                            View all notifications
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
