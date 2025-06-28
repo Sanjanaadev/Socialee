@@ -316,3 +316,44 @@ const Signup = () => {
             </Link>
           </p>
         </div>
+      </motion.div>
+
+      {/* Success Modal */}
+      <AnimatePresence>
+        {showSuccessModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            onClick={handleSuccessModalClose}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card p-8 rounded-xl max-w-md mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center">
+                <CheckCircle size={64} className="text-success mx-auto mb-4" />
+                <h3 className="text-2xl font-bold text-text-primary mb-2">Welcome to Socialee!</h3>
+                <p className="text-text-secondary mb-6">
+                  Your account has been created successfully. You can now start connecting with friends and sharing your moments.
+                </p>
+                <button
+                  onClick={handleSuccessModalClose}
+                  className="btn-primary w-full"
+                >
+                  Get Started
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+};
+
+export default Signup;
