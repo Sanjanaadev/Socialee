@@ -39,13 +39,13 @@ const Profile = () => {
         email: userData.email || '',
         profilePic: userData.profilePic || '',
         bio: userData.bio || '',
-        followers: userData.followers?.length || 0,
-        following: userData.following?.length || 0,
+        followers: Array.isArray(userData.followers) ? userData.followers.length : 0,
+        following: Array.isArray(userData.following) ? userData.following.length : 0,
         posts: 0 // Will be updated after loading posts
       };
 
       setProfileUser(formattedUser);
-      setFollowersList(userData.followers || []);
+      setFollowersList(Array.isArray(userData.followers) ? userData.followers : []);
 
       // Load user posts
       const posts = await postsAPI.getUserPosts(targetUserId);
@@ -54,8 +54,8 @@ const Profile = () => {
         imageUrl: post.imageUrl,
         caption: post.caption,
         author: formattedUser,
-        likes: post.likes?.length || 0,
-        comments: post.comments || [],
+        likes: Array.isArray(post.likes) ? post.likes.length : 0,
+        comments: Array.isArray(post.comments) ? post.comments : [],
         createdAt: new Date(post.createdAt).toLocaleDateString(),
         height: 350
       }));
@@ -84,8 +84,8 @@ const Profile = () => {
               following: 0,
               posts: 0
             },
-            likes: post.likes?.length || 0,
-            comments: post.comments || [],
+            likes: Array.isArray(post.likes) ? post.likes.length : 0,
+            comments: Array.isArray(post.comments) ? post.comments : [],
             createdAt: new Date(post.createdAt).toLocaleDateString(),
             height: 350
           })));

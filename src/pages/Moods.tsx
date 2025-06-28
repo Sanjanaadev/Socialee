@@ -76,7 +76,17 @@ const Moods = () => {
       if (response.ok) {
         const moods = await response.json();
         console.log('Loaded moods:', moods);
-        setUserMoods(moods);
+        
+        // Ensure all moods have proper array initialization
+        const processedMoods = moods.map((mood: any) => ({
+          ...mood,
+          likes: Array.isArray(mood.likes) ? mood.likes : [],
+          comments: Array.isArray(mood.comments) ? mood.comments : [],
+          likesCount: Array.isArray(mood.likes) ? mood.likes.length : 0,
+          commentsCount: Array.isArray(mood.comments) ? mood.comments.length : 0
+        }));
+        
+        setUserMoods(processedMoods);
       } else {
         console.error('Failed to load moods');
       }
@@ -119,7 +129,17 @@ const Moods = () => {
 
       if (response.ok) {
         const newMoodPost = await response.json();
-        setUserMoods(prev => [newMoodPost, ...prev]);
+        
+        // Ensure the new mood has proper array initialization
+        const processedMood = {
+          ...newMoodPost,
+          likes: Array.isArray(newMoodPost.likes) ? newMoodPost.likes : [],
+          comments: Array.isArray(newMoodPost.comments) ? newMoodPost.comments : [],
+          likesCount: Array.isArray(newMoodPost.likes) ? newMoodPost.likes.length : 0,
+          commentsCount: Array.isArray(newMoodPost.comments) ? newMoodPost.comments.length : 0
+        };
+        
+        setUserMoods(prev => [processedMood, ...prev]);
         setNewMood('');
         setSelectedMoodType('neutral');
         setSelectedBgColor('#FF2E93');
@@ -157,7 +177,11 @@ const Moods = () => {
         setUserMoods(prevMoods => 
           prevMoods.map(mood => 
             mood._id === moodId 
-              ? { ...mood, likes: result.mood.likes, likesCount: result.likes }
+              ? { 
+                  ...mood, 
+                  likes: Array.isArray(result.mood.likes) ? result.mood.likes : [],
+                  likesCount: result.likes || 0
+                }
               : mood
           )
         );
@@ -200,7 +224,7 @@ const Moods = () => {
             mood._id === moodId
               ? { 
                   ...mood, 
-                  comments: [...(mood.comments || []), comment],
+                  comments: [...(Array.isArray(mood.comments) ? mood.comments : []), comment],
                   commentsCount: (mood.commentsCount || 0) + 1
                 }
               : mood
@@ -391,14 +415,14 @@ const Moods = () => {
                 >
                   <Heart 
                     size={18} 
-                    fill={mood.likes.includes(user?.id || '') ? 'currentColor' : 'none'}
+                    fill={Array.isArray(mood.likes) && mood.likes.includes(user?.id || '') ? 'currentColor' : 'none'}
                   />
-                  <span className="text-sm">{mood.likesCount || mood.likes?.length || 0}</span>
+                  <span className="text-sm">{mood.likesCount || 0}</span>
                 </button>
                 
                 <div className="flex items-center gap-1" style={{ color: mood.textColor }}>
                   <MessageCircle size={18} />
-                  <span className="text-sm">{mood.commentsCount || mood.comments?.length || 0}</span>
+                  <span className="text-sm">{mood.commentsCount || 0}</span>
                 </div>
               </div>
 

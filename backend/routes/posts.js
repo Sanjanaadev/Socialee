@@ -24,6 +24,12 @@ router.post('/', auth, async (req, res) => {
       return res.status(400).json({ error: 'Caption cannot exceed 2200 characters' });
     }
 
+    // Verify user exists
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
     const newPost = new Post({
       imageUrl,
       caption: caption.trim(),
@@ -37,8 +43,23 @@ router.post('/', auth, async (req, res) => {
 
     const savedPost = await newPost.save();
     
-    // Populate author details
+    // Populate author details with error handling
     await savedPost.populate('author', 'name username profilePic');
+
+    // Ensure populated data exists
+    if (!savedPost.author) {
+      console.error('Failed to populate author for post:', savedPost._id);
+      return res.status(500).json({ error: 'Failed to create post - author data missing' });
+    }
+
+    // Ensure arrays are properly initialized in response
+    const responsePost = {
+      ...savedPost.toJSON(),
+      likes: savedPost.likes || [],
+      comments: savedPost.comments || [],
+      likesCount: savedPost.likes ? savedPost.likes.length : 0,
+      commentsCount: savedPost.comments ? savedPost.comments.length : 0
+    };
 
     // Notify followers of new post
     console.log('📢 About to notify followers of new post');
@@ -50,7 +71,7 @@ router.post('/', auth, async (req, res) => {
     }
 
     console.log('✅ Post created successfully:', savedPost._id);
-    res.status(201).json(savedPost);
+    res.status(201).json(responsePost);
   } catch (err) {
     console.error('Create post error:', err);
     res.status(500).json({ error: 'Error creating post: ' + err.message });
@@ -63,13 +84,28 @@ router.get('/user/:userId', async (req, res) => {
     const { userId } = req.params;
     console.log('📖 Getting posts for user:', userId);
     
+    // Verify user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
     const posts = await Post.find({ author: userId, isArchived: false })
       .populate('author', 'name username profilePic')
       .populate('comments.author', 'name username profilePic')
       .sort({ createdAt: -1 });
 
-    console.log(`✅ Found ${posts.length} posts for user`);
-    res.json(posts);
+    // Filter out posts with missing author data and ensure arrays are initialized
+    const validPosts = posts.filter(post => post.author).map(post => ({
+      ...post.toJSON(),
+      likes: post.likes || [],
+      comments: post.comments || [],
+      likesCount: post.likes ? post.likes.length : 0,
+      commentsCount: post.comments ? post.comments.length : 0
+    }));
+
+    console.log(`✅ Found ${validPosts.length} posts for user`);
+    res.json(validPosts);
   } catch (err) {
     console.error('Get user posts error:', err);
     res.status(500).json({ error: 'Error fetching posts: ' + err.message });
@@ -87,7 +123,7 @@ router.get('/feed', auth, async (req, res) => {
     }
 
     // Get posts from followed users and own posts
-    const followingIds = [...user.following, req.userId];
+    const followingIds = [...(user.following || []), req.userId];
     console.log('👥 Getting posts from users:', followingIds.length);
     
     const posts = await Post.find({ 
@@ -99,8 +135,17 @@ router.get('/feed', auth, async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(50);
 
-    console.log(`✅ Found ${posts.length} posts for feed`);
-    res.json(posts);
+    // Filter out posts with missing author data and ensure arrays are initialized
+    const validPosts = posts.filter(post => post.author).map(post => ({
+      ...post.toJSON(),
+      likes: post.likes || [],
+      comments: post.comments || [],
+      likesCount: post.likes ? post.likes.length : 0,
+      commentsCount: post.comments ? post.comments.length : 0
+    }));
+
+    console.log(`✅ Found ${validPosts.length} posts for feed`);
+    res.json(validPosts);
   } catch (err) {
     console.error('Get feed posts error:', err);
     res.status(500).json({ error: 'Error fetching feed: ' + err.message });
@@ -120,6 +165,11 @@ router.post('/:postId/like', auth, async (req, res) => {
       return res.status(404).json({ error: 'Post not found' });
     }
 
+    // Ensure likes array exists
+    if (!post.likes) {
+      post.likes = [];
+    }
+
     const isLiked = post.likes.includes(userId);
     
     if (isLiked) {
@@ -133,8 +183,10 @@ router.post('/:postId/like', auth, async (req, res) => {
       if (post.author.toString() !== userId) {
         try {
           const user = await User.findById(userId);
-          console.log('📢 Creating like notification for post author:', post.author);
-          await notifyPostInteraction(post.author, userId, 'like', postId, user.name);
+          if (user) {
+            console.log('📢 Creating like notification for post author:', post.author);
+            await notifyPostInteraction(post.author, userId, 'like', postId, user.name);
+          }
         } catch (notifyError) {
           console.error('Error creating notification:', notifyError);
         }
@@ -147,9 +199,13 @@ router.post('/:postId/like', auth, async (req, res) => {
     console.log(`✅ Post ${isLiked ? 'unliked' : 'liked'} successfully`);
 
     res.json({ 
-      likes: post.likes.length, 
+      likes: post.likes ? post.likes.length : 0, 
       isLiked: !isLiked,
-      post 
+      post: {
+        ...post.toJSON(),
+        likes: post.likes || [],
+        comments: post.comments || []
+      }
     });
   } catch (err) {
     console.error('Like post error:', err);
@@ -179,6 +235,11 @@ router.post('/:postId/comments', auth, async (req, res) => {
       return res.status(404).json({ error: 'Post not found' });
     }
 
+    // Ensure comments array exists
+    if (!post.comments) {
+      post.comments = [];
+    }
+
     const newComment = {
       text: text.trim(),
       author: userId,
@@ -197,8 +258,10 @@ router.post('/:postId/comments', auth, async (req, res) => {
     if (post.author.toString() !== userId) {
       try {
         const user = await User.findById(userId);
-        console.log('📢 Creating comment notification for post author:', post.author);
-        await notifyPostInteraction(post.author, userId, 'comment', postId, user.name);
+        if (user) {
+          console.log('📢 Creating comment notification for post author:', post.author);
+          await notifyPostInteraction(post.author, userId, 'comment', postId, user.name);
+        }
       } catch (notifyError) {
         console.error('Error creating notification:', notifyError);
       }

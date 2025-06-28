@@ -9,6 +9,17 @@ const createNotification = async (recipientId, senderId, type, message, relatedD
       return null;
     }
 
+    // Verify both users exist
+    const [recipient, sender] = await Promise.all([
+      User.findById(recipientId),
+      User.findById(senderId)
+    ]);
+
+    if (!recipient || !sender) {
+      console.error('Cannot create notification: recipient or sender not found');
+      return null;
+    }
+
     // Check if a similar notification already exists (to avoid spam)
     const existingNotification = await Notification.findOne({
       recipient: recipientId,
@@ -51,7 +62,7 @@ const createNotification = async (recipientId, senderId, type, message, relatedD
 const notifyFollowersOfNewPost = async (authorId, postId, postType = 'post') => {
   try {
     const author = await User.findById(authorId).populate('followers', '_id name');
-    if (!author || !author.followers.length) {
+    if (!author || !author.followers || !author.followers.length) {
       console.log('No followers to notify for new post');
       return;
     }
@@ -81,6 +92,17 @@ const notifyPostInteraction = async (postAuthorId, senderId, type, postId, sende
   try {
     // Don't notify if user is interacting with their own content
     if (postAuthorId.toString() === senderId.toString()) {
+      return;
+    }
+
+    // Verify users exist
+    const [postAuthor, sender] = await Promise.all([
+      User.findById(postAuthorId),
+      User.findById(senderId)
+    ]);
+
+    if (!postAuthor || !sender) {
+      console.error('Cannot create interaction notification: user not found');
       return;
     }
 

@@ -32,23 +32,33 @@ const postSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
-  likes: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  }],
-  comments: [commentSchema],
+  likes: {
+    type: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    }],
+    default: []
+  },
+  comments: {
+    type: [commentSchema],
+    default: []
+  },
   isArchived: {
     type: Boolean,
     default: false
   },
   location: {
     type: String,
-    trim: true
+    trim: true,
+    default: ''
   },
-  tags: [{
-    type: String,
-    trim: true
-  }]
+  tags: {
+    type: [{
+      type: String,
+      trim: true
+    }],
+    default: []
+  }
 }, {
   timestamps: true
 });
@@ -60,12 +70,12 @@ postSchema.index({ isArchived: 1 });
 
 // Virtual for likes count
 postSchema.virtual('likesCount').get(function() {
-  return this.likes.length;
+  return this.likes ? this.likes.length : 0;
 });
 
 // Virtual for comments count
 postSchema.virtual('commentsCount').get(function() {
-  return this.comments.length;
+  return this.comments ? this.comments.length : 0;
 });
 
 // Ensure virtual fields are serialized

@@ -16,20 +16,39 @@ router.post('/', auth, async (req, res) => {
       return res.status(400).json({ error: 'Media URL is required' });
     }
 
+    // Verify user exists
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
     const newSnap = new Snap({
       mediaUrl,
       caption: caption?.trim() || '',
       mediaType: mediaType || 'image',
-      author: req.userId
+      author: req.userId,
+      views: [],
+      reactions: []
     });
 
     const savedSnap = await newSnap.save();
     
-    // Populate author details
+    // Populate author details with error handling
     await savedSnap.populate('author', 'name username profilePic');
 
+    // Ensure populated data exists
+    if (!savedSnap.author) {
+      console.error('Failed to populate author for snap:', savedSnap._id);
+      return res.status(500).json({ error: 'Failed to create snap - author data missing' });
+    }
+
     // Notify followers of new snap
-    await notifyFollowersOfNewPost(req.userId, savedSnap._id, 'snap');
+    try {
+      await notifyFollowersOfNewPost(req.userId, savedSnap._id, 'snap');
+    } catch (notifyError) {
+      console.error('Error notifying followers:', notifyError);
+      // Don't fail the snap creation if notification fails
+    }
 
     console.log('✅ Snap created successfully:', savedSnap._id);
     res.status(201).json(savedSnap);
@@ -50,7 +69,7 @@ router.get('/feed', auth, async (req, res) => {
     }
 
     // Get snaps from followed users and own snaps
-    const followingIds = [...user.following, req.userId];
+    const followingIds = [...(user.following || []), req.userId];
     console.log('👥 Getting snaps from users:', followingIds.length);
     
     const snaps = await Snap.find({ 
@@ -61,8 +80,11 @@ router.get('/feed', auth, async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(50);
 
-    console.log(`✅ Found ${snaps.length} snaps for feed`);
-    res.json(snaps);
+    // Filter out snaps with missing author data
+    const validSnaps = snaps.filter(snap => snap.author);
+
+    console.log(`✅ Found ${validSnaps.length} snaps for feed`);
+    res.json(validSnaps);
   } catch (err) {
     console.error('Get snaps feed error:', err);
     res.status(500).json({ error: 'Error fetching snaps: ' + err.message });
@@ -75,6 +97,12 @@ router.get('/user/:userId', async (req, res) => {
     const { userId } = req.params;
     console.log('📸 Getting snaps for user:', userId);
     
+    // Verify user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
     const snaps = await Snap.find({ 
       author: userId,
       expiresAt: { $gt: new Date() } // Only non-expired snaps
@@ -82,8 +110,11 @@ router.get('/user/:userId', async (req, res) => {
       .populate('author', 'name username profilePic')
       .sort({ createdAt: -1 });
 
-    console.log(`✅ Found ${snaps.length} snaps for user`);
-    res.json(snaps);
+    // Filter out snaps with missing author data
+    const validSnaps = snaps.filter(snap => snap.author);
+
+    console.log(`✅ Found ${validSnaps.length} snaps for user`);
+    res.json(validSnaps);
   } catch (err) {
     console.error('Get user snaps error:', err);
     res.status(500).json({ error: 'Error fetching snaps: ' + err.message });
@@ -103,8 +134,13 @@ router.post('/:snapId/view', auth, async (req, res) => {
       return res.status(404).json({ error: 'Snap not found' });
     }
 
+    // Ensure views array exists
+    if (!snap.views) {
+      snap.views = [];
+    }
+
     // Check if user already viewed this snap
-    const alreadyViewed = snap.views.some(view => view.user.toString() === userId);
+    const alreadyViewed = snap.views.some(view => view.user && view.user.toString() === userId);
     
     if (!alreadyViewed) {
       snap.views.push({ user: userId });
@@ -141,7 +177,7 @@ router.post('/:snapId/react', auth, async (req, res) => {
     }
 
     // Check if user already reacted
-    const existingReactionIndex = snap.reactions.findIndex(r => r.user.toString() === userId);
+    const existingReactionIndex = snap.reactions.findIndex(r => r.user && r.user.toString() === userId);
     
     if (existingReactionIndex > -1) {
       // Update existing reaction or remove if same reaction

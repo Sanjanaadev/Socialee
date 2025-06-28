@@ -96,8 +96,15 @@ export const postsAPI = {
     try {
       console.log('📝 Creating post:', { caption: postData.caption.substring(0, 50) + '...' });
       const response = await api.post('/posts', postData);
-      console.log('✅ Post created successfully');
-      return response.data;
+      console.log('✅ Post created successfully:', response.data);
+      
+      // Ensure the response has proper array initialization
+      const post = response.data;
+      return {
+        ...post,
+        likes: Array.isArray(post.likes) ? post.likes : [],
+        comments: Array.isArray(post.comments) ? post.comments : []
+      };
     } catch (error) {
       console.error('❌ Post creation failed:', error);
       throw error;
@@ -108,7 +115,13 @@ export const postsAPI = {
     try {
       const response = await api.get(`/posts/user/${userId}`);
       console.log(`✅ Loaded ${response.data.length} posts for user ${userId}`);
-      return response.data;
+      
+      // Ensure all posts have proper array initialization
+      return response.data.map((post: any) => ({
+        ...post,
+        likes: Array.isArray(post.likes) ? post.likes : [],
+        comments: Array.isArray(post.comments) ? post.comments : []
+      }));
     } catch (error) {
       console.error('❌ Failed to load user posts:', error);
       throw error;
@@ -119,7 +132,13 @@ export const postsAPI = {
     try {
       const response = await api.get('/posts/feed');
       console.log(`✅ Loaded ${response.data.length} feed posts`);
-      return response.data;
+      
+      // Ensure all posts have proper array initialization
+      return response.data.map((post: any) => ({
+        ...post,
+        likes: Array.isArray(post.likes) ? post.likes : [],
+        comments: Array.isArray(post.comments) ? post.comments : []
+      }));
     } catch (error) {
       console.error('❌ Failed to load feed posts:', error);
       throw error;
@@ -166,7 +185,14 @@ export const usersAPI = {
     try {
       const response = await api.get(`/users/${userId}`);
       console.log(`✅ Loaded profile for user ${userId}`);
-      return response.data;
+      
+      // Ensure arrays are properly initialized
+      const user = response.data;
+      return {
+        ...user,
+        followers: Array.isArray(user.followers) ? user.followers : [],
+        following: Array.isArray(user.following) ? user.following : []
+      };
     } catch (error) {
       console.error('❌ Failed to load profile:', error);
       throw error;
@@ -326,7 +352,13 @@ export const savedPostsAPI = {
     try {
       const response = await api.get('/saved-posts/saved');
       console.log(`✅ Loaded ${response.data.length} saved posts`);
-      return response.data;
+      
+      // Ensure all posts have proper array initialization
+      return response.data.map((post: any) => ({
+        ...post,
+        likes: Array.isArray(post.likes) ? post.likes : [],
+        comments: Array.isArray(post.comments) ? post.comments : []
+      }));
     } catch (error) {
       console.error('❌ Failed to load saved posts:', error);
       throw error;
@@ -404,7 +436,14 @@ export const snapsAPI = {
       console.log('📸 Creating snap');
       const response = await api.post('/snaps', snapData);
       console.log('✅ Snap created successfully');
-      return response.data;
+      
+      // Ensure the response has proper array initialization
+      const snap = response.data;
+      return {
+        ...snap,
+        views: Array.isArray(snap.views) ? snap.views : [],
+        reactions: Array.isArray(snap.reactions) ? snap.reactions : []
+      };
     } catch (error) {
       console.error('❌ Snap creation failed:', error);
       throw error;
@@ -415,7 +454,13 @@ export const snapsAPI = {
     try {
       const response = await api.get('/snaps/feed');
       console.log(`✅ Loaded ${response.data.length} snaps`);
-      return response.data;
+      
+      // Ensure all snaps have proper array initialization
+      return response.data.map((snap: any) => ({
+        ...snap,
+        views: Array.isArray(snap.views) ? snap.views : [],
+        reactions: Array.isArray(snap.reactions) ? snap.reactions : []
+      }));
     } catch (error) {
       console.error('❌ Failed to load snaps:', error);
       throw error;
@@ -426,7 +471,13 @@ export const snapsAPI = {
     try {
       const response = await api.get(`/snaps/user/${userId}`);
       console.log(`✅ Loaded ${response.data.length} snaps for user ${userId}`);
-      return response.data;
+      
+      // Ensure all snaps have proper array initialization
+      return response.data.map((snap: any) => ({
+        ...snap,
+        views: Array.isArray(snap.views) ? snap.views : [],
+        reactions: Array.isArray(snap.reactions) ? snap.reactions : []
+      }));
     } catch (error) {
       console.error('❌ Failed to load user snaps:', error);
       throw error;

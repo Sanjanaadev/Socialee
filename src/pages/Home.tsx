@@ -47,8 +47,8 @@ const Home = () => {
             following: 0,
             posts: 0
           },
-          likes: post.likes?.length || 0,
-          comments: post.comments?.map((comment: any) => ({
+          likes: Array.isArray(post.likes) ? post.likes.length : 0,
+          comments: Array.isArray(post.comments) ? post.comments.map((comment: any) => ({
             id: comment._id,
             text: comment.text,
             author: {
@@ -63,10 +63,10 @@ const Home = () => {
               posts: 0
             },
             createdAt: formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })
-          })) || [],
+          })) : [],
           createdAt: formatDistanceToNow(new Date(post.createdAt), { addSuffix: true }),
           height: 350,
-          isLiked: post.likes?.includes(user?.id) || false,
+          isLiked: Array.isArray(post.likes) ? post.likes.includes(user?.id) : false,
           isSaved
         };
       }));
@@ -93,7 +93,7 @@ const Home = () => {
           post.id === postId
             ? {
                 ...post,
-                likes: response.likes,
+                likes: response.likes || 0,
                 isLiked: response.isLiked
               }
             : post

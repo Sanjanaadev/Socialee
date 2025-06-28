@@ -40,14 +40,20 @@ const userSchema = new mongoose.Schema({
     default: '',
     maxlength: 150
   },
-  followers: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  }],
-  following: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  }],
+  followers: {
+    type: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    }],
+    default: []
+  },
+  following: {
+    type: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    }],
+    default: []
+  },
   isVerified: {
     type: Boolean,
     default: false
@@ -62,12 +68,12 @@ userSchema.index({ email: 1 }, { unique: true });
 
 // Virtual for followers count
 userSchema.virtual('followersCount').get(function() {
-  return this.followers.length;
+  return this.followers ? this.followers.length : 0;
 });
 
 // Virtual for following count
 userSchema.virtual('followingCount').get(function() {
-  return this.following.length;
+  return this.following ? this.following.length : 0;
 });
 
 // Ensure virtual fields are serialized

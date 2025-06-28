@@ -20,21 +20,40 @@ router.post('/', auth, async (req, res) => {
       return res.status(400).json({ error: 'Mood text cannot exceed 280 characters' });
     }
 
+    // Verify user exists
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
     const newMood = new Mood({
       text: text.trim(),
       author: req.userId,
       mood: mood || 'neutral',
       backgroundColor: backgroundColor || '#FF2E93',
-      textColor: textColor || '#FFFFFF'
+      textColor: textColor || '#FFFFFF',
+      likes: [],
+      comments: []
     });
 
     const savedMood = await newMood.save();
     
-    // Populate author details
+    // Populate author details with error handling
     await savedMood.populate('author', 'name username profilePic');
 
+    // Ensure populated data exists
+    if (!savedMood.author) {
+      console.error('Failed to populate author for mood:', savedMood._id);
+      return res.status(500).json({ error: 'Failed to create mood - author data missing' });
+    }
+
     // Notify followers of new mood
-    await notifyFollowersOfNewPost(req.userId, savedMood._id, 'mood');
+    try {
+      await notifyFollowersOfNewPost(req.userId, savedMood._id, 'mood');
+    } catch (notifyError) {
+      console.error('Error notifying followers:', notifyError);
+      // Don't fail the mood creation if notification fails
+    }
 
     console.log('✅ Mood created successfully:', savedMood._id);
     res.status(201).json(savedMood);
@@ -55,7 +74,7 @@ router.get('/feed', auth, async (req, res) => {
     }
 
     // Get moods from followed users and own moods
-    const followingIds = [...user.following, req.userId];
+    const followingIds = [...(user.following || []), req.userId];
     console.log('👥 Getting moods from users:', followingIds.length);
     
     const moods = await Mood.find({ 
@@ -66,8 +85,11 @@ router.get('/feed', auth, async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(50);
 
-    console.log(`✅ Found ${moods.length} moods for feed`);
-    res.json(moods);
+    // Filter out moods with missing author data
+    const validMoods = moods.filter(mood => mood.author);
+
+    console.log(`✅ Found ${validMoods.length} moods for feed`);
+    res.json(validMoods);
   } catch (err) {
     console.error('Get moods feed error:', err);
     res.status(500).json({ error: 'Error fetching moods: ' + err.message });
@@ -80,13 +102,22 @@ router.get('/user/:userId', async (req, res) => {
     const { userId } = req.params;
     console.log('💭 Getting moods for user:', userId);
     
+    // Verify user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
     const moods = await Mood.find({ author: userId })
       .populate('author', 'name username profilePic')
       .populate('comments.author', 'name username profilePic')
       .sort({ createdAt: -1 });
 
-    console.log(`✅ Found ${moods.length} moods for user`);
-    res.json(moods);
+    // Filter out moods with missing author data
+    const validMoods = moods.filter(mood => mood.author);
+
+    console.log(`✅ Found ${validMoods.length} moods for user`);
+    res.json(validMoods);
   } catch (err) {
     console.error('Get user moods error:', err);
     res.status(500).json({ error: 'Error fetching moods: ' + err.message });
@@ -106,6 +137,11 @@ router.post('/:moodId/like', auth, async (req, res) => {
       return res.status(404).json({ error: 'Mood not found' });
     }
 
+    // Ensure likes array exists
+    if (!mood.likes) {
+      mood.likes = [];
+    }
+
     const isLiked = mood.likes.includes(userId);
     
     if (isLiked) {
@@ -118,8 +154,10 @@ router.post('/:moodId/like', auth, async (req, res) => {
       // Create notification for mood author (only when liking, not unliking)
       if (mood.author.toString() !== userId) {
         const user = await User.findById(userId);
-        console.log('📢 Creating like notification for mood author:', mood.author);
-        await notifyPostInteraction(mood.author, userId, 'like', null, user.name, { relatedMood: moodId });
+        if (user) {
+          console.log('📢 Creating like notification for mood author:', mood.author);
+          await notifyPostInteraction(mood.author, userId, 'like', null, user.name, { relatedMood: moodId });
+        }
       }
     }
 
@@ -130,7 +168,7 @@ router.post('/:moodId/like', auth, async (req, res) => {
     console.log(`✅ Mood ${isLiked ? 'unliked' : 'liked'} successfully`);
 
     res.json({ 
-      likes: mood.likes.length, 
+      likes: mood.likes ? mood.likes.length : 0, 
       isLiked: !isLiked,
       mood 
     });
@@ -162,6 +200,11 @@ router.post('/:moodId/comments', auth, async (req, res) => {
       return res.status(404).json({ error: 'Mood not found' });
     }
 
+    // Ensure comments array exists
+    if (!mood.comments) {
+      mood.comments = [];
+    }
+
     const newComment = {
       text: text.trim(),
       author: userId,
@@ -180,8 +223,10 @@ router.post('/:moodId/comments', auth, async (req, res) => {
     // Create notification for mood author
     if (mood.author._id.toString() !== userId) {
       const user = await User.findById(userId);
-      console.log('📢 Creating comment notification for mood author:', mood.author._id);
-      await notifyPostInteraction(mood.author._id, userId, 'comment', null, user.name, { relatedMood: moodId });
+      if (user) {
+        console.log('📢 Creating comment notification for mood author:', mood.author._id);
+        await notifyPostInteraction(mood.author._id, userId, 'comment', null, user.name, { relatedMood: moodId });
+      }
     }
     
     console.log('✅ Comment added successfully to mood:', moodId);

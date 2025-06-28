@@ -43,15 +43,17 @@ const CreatePost = () => {
 
     setIsLoading(true);
     try {
-      await postsAPI.createPost({
+      const response = await postsAPI.createPost({
         imageUrl: selectedImage,
         caption: caption.trim()
       });
       
+      console.log('Post created successfully:', response);
       toast.success('Post created successfully!');
       navigate('/home');
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || 'Failed to create post';
+      console.error('Create post error:', error);
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to create post';
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);
