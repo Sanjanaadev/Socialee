@@ -32,6 +32,7 @@ router.post('/', auth, async (req, res) => {
     await savedPost.populate('author', 'name username profilePic');
 
     // Notify followers of new post
+    console.log('📢 About to notify followers of new post');
     await notifyFollowersOfNewPost(req.userId, savedPost._id, 'post');
 
     console.log('✅ Post created successfully:', savedPost._id);
