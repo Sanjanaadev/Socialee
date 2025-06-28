@@ -32,6 +32,7 @@ router.get('/unread-count', auth, async (req, res) => {
       read: false
     });
 
+    console.log(`📊 Unread notifications for user ${req.userId}: ${unreadCount}`);
     res.json({ unreadCount });
   } catch (err) {
     console.error('Get unread count error:', err);
@@ -65,13 +66,13 @@ router.put('/:notificationId/read', auth, async (req, res) => {
 // Mark all notifications as read
 router.put('/mark-all-read', auth, async (req, res) => {
   try {
-    await Notification.updateMany(
+    const result = await Notification.updateMany(
       { recipient: req.userId, read: false },
       { read: true }
     );
 
-    console.log('✅ All notifications marked as read');
-    res.json({ message: 'All notifications marked as read' });
+    console.log(`✅ Marked ${result.modifiedCount} notifications as read for user ${req.userId}`);
+    res.json({ message: 'All notifications marked as read', count: result.modifiedCount });
   } catch (err) {
     console.error('Mark all notifications as read error:', err);
     res.status(500).json({ error: 'Error marking all notifications as read: ' + err.message });
