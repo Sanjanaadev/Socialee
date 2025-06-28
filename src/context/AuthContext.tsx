@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { User } from '../types';
-import { authAPI, usersAPI } from '../services/api';
+import { authAPI, usersAPI, testConnection } from '../services/api';
 import { toast } from 'react-hot-toast';
 
 interface AuthContextType {
@@ -19,6 +19,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   searchUsers: (query: string) => Promise<User[]>;
   loadAllUsers: () => Promise<void>;
+  isBackendConnected: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -44,19 +45,38 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const [registeredUsers, setRegisteredUsers] = useState<User[]>([]);
   const [followingUsers, setFollowingUsers] = useState<User[]>([]);
+  const [isBackendConnected, setIsBackendConnected] = useState(false);
+
+  // Test backend connection on mount
+  useEffect(() => {
+    const checkBackendConnection = async () => {
+      try {
+        await testConnection();
+        setIsBackendConnected(true);
+        console.log('✅ Backend connection established');
+      } catch (error) {
+        setIsBackendConnected(false);
+        console.error('❌ Backend connection failed:', error);
+        toast.error('Cannot connect to backend server. Please make sure the backend is running on port 5000.');
+      }
+    };
+
+    checkBackendConnection();
+  }, []);
 
   // Load user data on mount if token exists
   useEffect(() => {
     const token = localStorage.getItem('socialee_token');
-    if (token && user) {
+    if (token && user && isBackendConnected) {
       loadUserProfile();
       loadAllUsers();
     }
-  }, []);
+  }, [isBackendConnected]);
 
   const loadUserProfile = async () => {
     try {
       if (user) {
+        console.log('🔄 Loading user profile...');
         const profileData = await usersAPI.getProfile(user.id);
         const updatedUser = {
           id: profileData._id,
@@ -72,11 +92,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setUser(updatedUser);
         setFollowingUsers(profileData.following || []);
         localStorage.setItem('socialee_user', JSON.stringify(updatedUser));
+        console.log('✅ User profile loaded successfully');
       }
     } catch (error: any) {
-      console.error('Error loading user profile:', error);
+      console.error('❌ Error loading user profile:', error);
       // If token is invalid, clear it
       if (error.response?.status === 401) {
+        console.log('🔐 Token invalid, logging out');
         logout();
       }
     }
@@ -84,6 +106,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const loadAllUsers = async () => {
     try {
+      console.log('🔄 Loading all users...');
       const users = await usersAPI.getAllUsers();
       const formattedUsers = users.map((user: any) => ({
         id: user._id,
@@ -97,13 +120,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         posts: 0
       }));
       setRegisteredUsers(formattedUsers);
+      console.log(`✅ Loaded ${formattedUsers.length} users`);
     } catch (error) {
-      console.error('Error loading all users:', error);
+      console.error('❌ Error loading all users:', error);
     }
   };
 
   const login = async (username: string, password: string) => {
     try {
+      console.log('🔄 Attempting login...');
       const response = await authAPI.login(username, password);
       const { token, user: userData } = response;
       
@@ -132,7 +157,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       await loadAllUsers();
       
       toast.success('Welcome back!');
+      console.log('✅ Login successful');
     } catch (error: any) {
+      console.error('❌ Login failed:', error);
       const errorMessage = error.response?.data?.error || 'Login failed';
       throw new Error(errorMessage);
     }
@@ -140,12 +167,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signup = async (name: string, username: string, email: string, password: string) => {
     try {
+      console.log('🔄 Attempting signup...');
       const response = await authAPI.signup(name, username, email, password);
       toast.success('Account created successfully! Please log in.');
+      console.log('✅ Signup successful');
       
       // Reload all users to include the new user
       await loadAllUsers();
     } catch (error: any) {
+      console.error('❌ Signup failed:', error);
       const errorMessage = error.response?.data?.error || 'Signup failed';
       throw new Error(errorMessage);
     }
@@ -155,6 +185,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     if (!user) throw new Error('No user logged in');
 
     try {
+      console.log('🔄 Updating profile...');
       const updatedUser = await usersAPI.updateProfile(profileData);
       const formattedUser = {
         ...user,
@@ -171,7 +202,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       await loadAllUsers();
       
       toast.success('Profile updated successfully!');
+      console.log('✅ Profile updated successfully');
     } catch (error: any) {
+      console.error('❌ Profile update failed:', error);
       const errorMessage = error.response?.data?.error || 'Failed to update profile';
       throw new Error(errorMessage);
     }
@@ -181,9 +214,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     if (!user) throw new Error('No user logged in');
 
     try {
+      console.log('🔄 Updating password...');
       await authAPI.changePassword(oldPassword, newPassword);
       toast.success('Password updated successfully!');
+      console.log('✅ Password updated successfully');
     } catch (error: any) {
+      console.error('❌ Password update failed:', error);
       const errorMessage = error.response?.data?.error || 'Failed to update password';
       throw new Error(errorMessage);
     }
@@ -205,13 +241,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     if (!user) return;
 
     try {
+      console.log(`🔄 Following user ${userId}...`);
       await usersAPI.followUser(userId);
       
       // Reload user profile to get updated following list
       await loadUserProfile();
       
       toast.success('User followed successfully!');
+      console.log(`✅ User ${userId} followed successfully`);
     } catch (error: any) {
+      console.error('❌ Follow user failed:', error);
       const errorMessage = error.response?.data?.error || 'Failed to follow user';
       toast.error(errorMessage);
     }
@@ -221,13 +260,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     if (!user) return;
 
     try {
+      console.log(`🔄 Unfollowing user ${userId}...`);
       await usersAPI.unfollowUser(userId);
       
       // Reload user profile to get updated following list
       await loadUserProfile();
       
       toast.success('User unfollowed successfully!');
+      console.log(`✅ User ${userId} unfollowed successfully`);
     } catch (error: any) {
+      console.error('❌ Unfollow user failed:', error);
       const errorMessage = error.response?.data?.error || 'Failed to unfollow user';
       toast.error(errorMessage);
     }
@@ -252,18 +294,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         posts: 0
       }));
     } catch (error) {
-      console.error('Error searching users:', error);
+      console.error('❌ Error searching users:', error);
       return [];
     }
   };
 
   const logout = () => {
+    console.log('🔄 Logging out...');
     localStorage.removeItem('socialee_token');
     localStorage.removeItem('socialee_user');
     setUser(null);
     setFollowingUsers([]);
     setRegisteredUsers([]);
     toast.success('Logged out successfully!');
+    console.log('✅ Logout successful');
   };
 
   const value = {
@@ -282,6 +326,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     isAuthenticated: !!user,
     searchUsers,
     loadAllUsers,
+    isBackendConnected,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

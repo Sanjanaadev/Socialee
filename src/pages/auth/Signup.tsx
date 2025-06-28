@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { User, UploadCloud, CheckCircle } from 'lucide-react';
+import { User, UploadCloud, CheckCircle, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const Signup = () => {
@@ -16,7 +16,7 @@ const Signup = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   
-  const { signup } = useAuth();
+  const { signup, isBackendConnected } = useAuth();
   const navigate = useNavigate();
 
   const handleProfilePicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -101,6 +101,11 @@ const Signup = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!isBackendConnected) {
+      setErrors({ general: 'Backend server is not connected. Please make sure the backend is running.' });
+      return;
+    }
+    
     if (!validateForm()) {
       return;
     }
@@ -108,9 +113,12 @@ const Signup = () => {
     setIsLoading(true);
 
     try {
+      console.log('🔄 Attempting to create account...');
       await signup(name.trim(), username.trim(), email.trim(), password);
+      console.log('✅ Account created successfully');
       setShowSuccessModal(true);
     } catch (err: any) {
+      console.error('❌ Signup failed:', err);
       setErrors({ general: err.message || 'Failed to create account' });
     } finally {
       setIsLoading(false);
@@ -147,6 +155,17 @@ const Signup = () => {
           </motion.h2>
           <p className="text-text-secondary mt-2">Time to make your mark.</p>
         </div>
+
+        {/* Backend Connection Status */}
+        {!isBackendConnected && (
+          <div className="bg-error bg-opacity-10 text-error px-4 py-3 rounded-md mb-4 flex items-center">
+            <AlertCircle size={20} className="mr-2" />
+            <div>
+              <p className="font-medium">Backend Disconnected</p>
+              <p className="text-sm">Please make sure the backend server is running on port 5000.</p>
+            </div>
+          </div>
+        )}
 
         {errors.general && (
           <div className="bg-error bg-opacity-10 text-error px-4 py-3 rounded-md mb-4">
@@ -281,8 +300,8 @@ const Signup = () => {
           <div>
             <button
               type="submit"
-              className="btn-primary w-full"
-              disabled={isLoading}
+              className={`btn-primary w-full ${!isBackendConnected || isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={!isBackendConnected || isLoading}
             >
               {isLoading ? 'Creating Account...' : 'Sign Up'}
             </button>
@@ -297,46 +316,3 @@ const Signup = () => {
             </Link>
           </p>
         </div>
-      </motion.div>
-
-      {/* Success Modal */}
-      <AnimatePresence>
-        {showSuccessModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-background-card rounded-xl p-8 max-w-md w-full text-center"
-            >
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-                className="mx-auto w-16 h-16 bg-accent-pink rounded-full flex items-center justify-center mb-4"
-              >
-                <CheckCircle size={32} className="text-white" />
-              </motion.div>
-              
-              <h2 className="text-2xl font-bold text-text-primary mb-2">
-                Account Created Successfully!
-              </h2>
-              <p className="text-text-secondary mb-6">
-                Welcome to Socialee! You can now sign in with your credentials.
-              </p>
-              
-              <button
-                onClick={handleSuccessModalClose}
-                className="btn-primary w-full"
-              >
-                Continue to Sign In
-              </button>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-    </>
-  );
-};
-
-export default Signup;

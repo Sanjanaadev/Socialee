@@ -56,10 +56,9 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index for better query performance
-userSchema.index({ username: 1 });
-userSchema.index({ email: 1 });
-userSchema.index({ name: 1 });
+// Remove duplicate index definitions to fix warnings
+userSchema.index({ username: 1 }, { unique: true });
+userSchema.index({ email: 1 }, { unique: true });
 
 // Virtual for followers count
 userSchema.virtual('followersCount').get(function() {

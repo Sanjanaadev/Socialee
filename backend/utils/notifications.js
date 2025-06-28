@@ -32,6 +32,7 @@ const createNotification = async (recipientId, senderId, type, message, relatedD
       sender: senderId,
       type,
       message,
+      read: false,
       ...relatedData
     };
 
@@ -62,6 +63,7 @@ const notifyFollowersOfNewPost = async (authorId, postId, postType = 'post') => 
       sender: authorId,
       type: postType,
       message: `${author.name} shared a new ${postType}`,
+      read: false,
       ...(postType === 'post' && { relatedPost: postId }),
       ...(postType === 'snap' && { relatedSnap: postId }),
       ...(postType === 'mood' && { relatedMood: postId })

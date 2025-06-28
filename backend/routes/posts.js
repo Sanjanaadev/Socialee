@@ -20,10 +20,19 @@ router.post('/', auth, async (req, res) => {
       return res.status(400).json({ error: 'Caption cannot be empty' });
     }
 
+    if (caption.trim().length > 2200) {
+      return res.status(400).json({ error: 'Caption cannot exceed 2200 characters' });
+    }
+
     const newPost = new Post({
       imageUrl,
       caption: caption.trim(),
-      author: req.userId
+      author: req.userId,
+      likes: [],
+      comments: [],
+      isArchived: false,
+      location: '',
+      tags: []
     });
 
     const savedPost = await newPost.save();
@@ -33,7 +42,12 @@ router.post('/', auth, async (req, res) => {
 
     // Notify followers of new post
     console.log('📢 About to notify followers of new post');
-    await notifyFollowersOfNewPost(req.userId, savedPost._id, 'post');
+    try {
+      await notifyFollowersOfNewPost(req.userId, savedPost._id, 'post');
+    } catch (notifyError) {
+      console.error('Error notifying followers:', notifyError);
+      // Don't fail the post creation if notification fails
+    }
 
     console.log('✅ Post created successfully:', savedPost._id);
     res.status(201).json(savedPost);
@@ -117,9 +131,13 @@ router.post('/:postId/like', auth, async (req, res) => {
       
       // Create notification for post author (only when liking, not unliking)
       if (post.author.toString() !== userId) {
-        const user = await User.findById(userId);
-        console.log('📢 Creating like notification for post author:', post.author);
-        await notifyPostInteraction(post.author, userId, 'like', postId, user.name);
+        try {
+          const user = await User.findById(userId);
+          console.log('📢 Creating like notification for post author:', post.author);
+          await notifyPostInteraction(post.author, userId, 'like', postId, user.name);
+        } catch (notifyError) {
+          console.error('Error creating notification:', notifyError);
+        }
       }
     }
 
@@ -152,6 +170,10 @@ router.post('/:postId/comments', auth, async (req, res) => {
       return res.status(400).json({ error: 'Comment text is required' });
     }
 
+    if (text.trim().length > 500) {
+      return res.status(400).json({ error: 'Comment cannot exceed 500 characters' });
+    }
+
     const post = await Post.findById(postId);
     if (!post) {
       return res.status(404).json({ error: 'Post not found' });
@@ -173,9 +195,13 @@ router.post('/:postId/comments', auth, async (req, res) => {
     
     // Create notification for post author
     if (post.author.toString() !== userId) {
-      const user = await User.findById(userId);
-      console.log('📢 Creating comment notification for post author:', post.author);
-      await notifyPostInteraction(post.author, userId, 'comment', postId, user.name);
+      try {
+        const user = await User.findById(userId);
+        console.log('📢 Creating comment notification for post author:', post.author);
+        await notifyPostInteraction(post.author, userId, 'comment', postId, user.name);
+      } catch (notifyError) {
+        console.error('Error creating notification:', notifyError);
+      }
     }
     
     console.log('✅ Comment added successfully');

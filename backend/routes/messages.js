@@ -34,7 +34,8 @@ router.post('/send', auth, async (req, res) => {
       sender: req.userId,
       receiver: receiverId,
       text: text.trim(),
-      conversationId
+      conversationId,
+      read: false
     });
 
     const savedMessage = await newMessage.save();
@@ -44,8 +45,12 @@ router.post('/send', auth, async (req, res) => {
     await savedMessage.populate('receiver', 'name username profilePic');
 
     // Create notification for receiver
-    const sender = await User.findById(req.userId);
-    await notifyMessage(receiverId, req.userId, sender.name);
+    try {
+      const sender = await User.findById(req.userId);
+      await notifyMessage(receiverId, req.userId, sender.name);
+    } catch (notifyError) {
+      console.error('Error creating message notification:', notifyError);
+    }
 
     console.log('✅ Message sent successfully:', savedMessage._id);
     res.status(201).json(savedMessage);

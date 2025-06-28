@@ -17,11 +17,20 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
-  origin: 'http://localhost:5173', // Vite dev server
-  credentials: true
+  origin: ['http://localhost:5173', 'http://localhost:3000'], // Add multiple origins
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Add request logging middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  next();
+});
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -35,7 +44,11 @@ app.use('/api/notifications', notificationsRoutes);
 
 // Sample Route
 app.get('/', (req, res) => {
-  res.json({ message: 'Socialee Backend API is running!' });
+  res.json({ 
+    message: 'Socialee Backend API is running!',
+    timestamp: new Date().toISOString(),
+    status: 'OK'
+  });
 });
 
 // Health check route with detailed database info
@@ -123,22 +136,72 @@ app.get('/api/debug/data', async (req, res) => {
   }
 });
 
+// Error handling middleware
+app.use((error, req, res, next) => {
+  console.error('❌ Server Error:', error);
+  res.status(500).json({
+    error: 'Internal Server Error',
+    message: error.message,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({
+    error: 'Route not found',
+    path: req.originalUrl,
+    method: req.method,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Connect to MongoDB and start server
 const startServer = async () => {
   try {
+    console.log('🚀 Starting Socialee Backend Server...');
+    
     // Connect to MongoDB
     await connectDB();
     
     // Start the server
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running at http://localhost:${PORT}`);
+    const server = app.listen(PORT, () => {
+      console.log(`✅ Server running at http://localhost:${PORT}`);
       console.log(`🌐 Frontend should connect to: http://localhost:${PORT}/api`);
       console.log(`🔍 Health check: http://localhost:${PORT}/api/health`);
       console.log(`🐛 Debug data: http://localhost:${PORT}/api/debug/data`);
       console.log(`📊 MongoDB: Check your 'socialee' database for stored data`);
+      console.log(`⏰ Server started at: ${new Date().toISOString()}`);
     });
+
+    // Handle server errors
+    server.on('error', (error) => {
+      console.error('❌ Server error:', error);
+      if (error.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} is already in use. Please use a different port or stop the existing server.`);
+      }
+    });
+
+    // Graceful shutdown
+    process.on('SIGTERM', () => {
+      console.log('🛑 SIGTERM received, shutting down gracefully');
+      server.close(() => {
+        console.log('✅ Server closed');
+        process.exit(0);
+      });
+    });
+
+    process.on('SIGINT', () => {
+      console.log('🛑 SIGINT received, shutting down gracefully');
+      server.close(() => {
+        console.log('✅ Server closed');
+        process.exit(0);
+      });
+    });
+
   } catch (error) {
     console.error('❌ Failed to start server:', error);
+    console.error('Stack trace:', error.stack);
     process.exit(1);
   }
 };

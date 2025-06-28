@@ -74,7 +74,12 @@ router.post('/signup', async (req, res) => {
       name: name.trim(),
       username: username.trim().toLowerCase(),
       email: email.trim().toLowerCase(),
-      password: hashedPassword
+      password: hashedPassword,
+      profilePic: '',
+      bio: '',
+      followers: [],
+      following: [],
+      isVerified: false
     };
 
     // Create and save user using User.create() instead of new User()
