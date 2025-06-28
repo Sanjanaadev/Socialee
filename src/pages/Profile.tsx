@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { User, Post } from '../types';
-import { MessageSquare, UserPlus, Camera, Settings, UserCheck } from 'lucide-react';
+import { MessageSquare, UserPlus, Camera, Settings, UserCheck, MoreHorizontal, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { usersAPI, postsAPI, savedPostsAPI } from '../services/api';
@@ -18,6 +18,8 @@ const Profile = () => {
   const [showFollowingModal, setShowFollowingModal] = useState(false);
   const [showFollowersModal, setShowFollowersModal] = useState(false);
   const [followersList, setFollowersList] = useState<User[]>([]);
+  const [showDropdown, setShowDropdown] = useState<{ [key: string]: boolean }>({});
+  const [isDeleting, setIsDeleting] = useState<{ [key: string]: boolean }>({});
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -141,6 +143,50 @@ const Profile = () => {
   const handleFollowersClick = () => {
     setShowFollowersModal(true);
   };
+
+  const handleDeletePost = async (postId: string) => {
+    if (!confirm('Are you sure you want to delete this post? This action cannot be undone.')) {
+      return;
+    }
+
+    setIsDeleting(prev => ({ ...prev, [postId]: true }));
+
+    try {
+      await postsAPI.deletePost(postId);
+      
+      // Remove the post from the user posts
+      setUserPosts(prevPosts => prevPosts.filter(post => post.id !== postId));
+      
+      // Update posts count
+      setProfileUser(prev => prev ? { ...prev, posts: prev.posts - 1 } : null);
+      
+      toast.success('Post deleted successfully');
+    } catch (error: any) {
+      console.error('Delete post error:', error);
+      const errorMessage = error.response?.data?.error || 'Failed to delete post';
+      toast.error(errorMessage);
+    } finally {
+      setIsDeleting(prev => ({ ...prev, [postId]: false }));
+      setShowDropdown(prev => ({ ...prev, [postId]: false }));
+    }
+  };
+
+  const toggleDropdown = (postId: string) => {
+    setShowDropdown(prev => ({
+      ...prev,
+      [postId]: !prev[postId]
+    }));
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setShowDropdown({});
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
 
   if (isLoading) {
     return (
@@ -316,7 +362,7 @@ const Profile = () => {
             {userPosts.map((post, index) => (
               <motion.div
                 key={post.id}
-                className="aspect-square rounded-lg overflow-hidden"
+                className="aspect-square rounded-lg overflow-hidden relative group"
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.3, delay: index * 0.1 }}
@@ -326,6 +372,45 @@ const Profile = () => {
                   alt={post.caption} 
                   className="h-full w-full object-cover hover:scale-105 transition-transform duration-300"
                 />
+                
+                {/* Delete button overlay for own posts */}
+                {isCurrentUser && (
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleDropdown(post.id);
+                        }}
+                        className="p-2 bg-black bg-opacity-50 rounded-full hover:bg-opacity-70 transition-colors"
+                        disabled={isDeleting[post.id]}
+                      >
+                        <MoreHorizontal size={16} className="text-white" />
+                      </button>
+
+                      <AnimatePresence>
+                        {showDropdown[post.id] && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                            className="absolute right-0 top-full mt-1 bg-background-card border border-border rounded-lg shadow-lg z-10 min-w-[120px]"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              onClick={() => handleDeletePost(post.id)}
+                              disabled={isDeleting[post.id]}
+                              className="w-full px-4 py-2 text-left text-error hover:bg-background-light transition-colors rounded-lg flex items-center gap-2 disabled:opacity-50"
+                            >
+                              <Trash2 size={14} />
+                              <span>{isDeleting[post.id] ? 'Deleting...' : 'Delete'}</span>
+                            </button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             ))}
           </div>
