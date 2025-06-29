@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Heart, Send, Trash2, MessageCircle, User } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Heart, Send, Trash2, MessageCircle, User, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { moodsAPI } from '../services/api';
 import { toast } from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -45,6 +46,9 @@ const Moods = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [newComments, setNewComments] = useState<{ [key: string]: string }>({});
   const [isCommenting, setIsCommenting] = useState<{ [key: string]: boolean }>({});
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [moodToDelete, setMoodToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { user } = useAuth();
 
   const moodTypes = [
@@ -63,35 +67,22 @@ const Moods = () => {
 
   const loadMoods = async () => {
     try {
-      const token = localStorage.getItem('socialee_token');
-      if (!token) return;
-
-      const response = await fetch('http://localhost:5000/api/moods/feed', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const moods = await response.json();
-        console.log('Loaded moods:', moods);
-        
-        // Ensure all moods have proper array initialization
-        const processedMoods = moods.map((mood: any) => ({
-          ...mood,
-          likes: Array.isArray(mood.likes) ? mood.likes : [],
-          comments: Array.isArray(mood.comments) ? mood.comments : [],
-          likesCount: Array.isArray(mood.likes) ? mood.likes.length : 0,
-          commentsCount: Array.isArray(mood.comments) ? mood.comments.length : 0
-        }));
-        
-        setUserMoods(processedMoods);
-      } else {
-        console.error('Failed to load moods');
-      }
+      const moods = await moodsAPI.getFeedMoods();
+      console.log('Loaded moods:', moods);
+      
+      // Ensure all moods have proper array initialization
+      const processedMoods = moods.map((mood: any) => ({
+        ...mood,
+        likes: Array.isArray(mood.likes) ? mood.likes : [],
+        comments: Array.isArray(mood.comments) ? mood.comments : [],
+        likesCount: Array.isArray(mood.likes) ? mood.likes.length : 0,
+        commentsCount: Array.isArray(mood.comments) ? mood.comments.length : 0
+      }));
+      
+      setUserMoods(processedMoods);
     } catch (error) {
       console.error('Error loading moods:', error);
+      toast.error('Failed to load moods');
     } finally {
       setIsLoading(false);
     }
@@ -105,12 +96,6 @@ const Moods = () => {
     setIsCreating(true);
 
     try {
-      const token = localStorage.getItem('socialee_token');
-      if (!token) {
-        toast.error('Please log in to post a mood');
-        return;
-      }
-
       const moodData = {
         text: newMood.trim(),
         mood: selectedMoodType,
@@ -118,39 +103,26 @@ const Moods = () => {
         textColor: '#FFFFFF'
       };
 
-      const response = await fetch('http://localhost:5000/api/moods', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(moodData),
-      });
-
-      if (response.ok) {
-        const newMoodPost = await response.json();
-        
-        // Ensure the new mood has proper array initialization
-        const processedMood = {
-          ...newMoodPost,
-          likes: Array.isArray(newMoodPost.likes) ? newMoodPost.likes : [],
-          comments: Array.isArray(newMoodPost.comments) ? newMoodPost.comments : [],
-          likesCount: Array.isArray(newMoodPost.likes) ? newMoodPost.likes.length : 0,
-          commentsCount: Array.isArray(newMoodPost.comments) ? newMoodPost.comments.length : 0
-        };
-        
-        setUserMoods(prev => [processedMood, ...prev]);
-        setNewMood('');
-        setSelectedMoodType('neutral');
-        setSelectedBgColor('#FF2E93');
-        toast.success('Mood posted successfully!');
-      } else {
-        const error = await response.json();
-        toast.error(error.error || 'Failed to post mood');
-      }
-    } catch (error) {
+      const newMoodPost = await moodsAPI.createMood(moodData);
+      
+      // Ensure the new mood has proper array initialization
+      const processedMood = {
+        ...newMoodPost,
+        likes: Array.isArray(newMoodPost.likes) ? newMoodPost.likes : [],
+        comments: Array.isArray(newMoodPost.comments) ? newMoodPost.comments : [],
+        likesCount: Array.isArray(newMoodPost.likes) ? newMoodPost.likes.length : 0,
+        commentsCount: Array.isArray(newMoodPost.comments) ? newMoodPost.comments.length : 0
+      };
+      
+      setUserMoods(prev => [processedMood, ...prev]);
+      setNewMood('');
+      setSelectedMoodType('neutral');
+      setSelectedBgColor('#FF2E93');
+      toast.success('Mood posted successfully!');
+    } catch (error: any) {
       console.error('Error creating mood:', error);
-      toast.error('Failed to post mood');
+      const errorMessage = error.response?.data?.error || 'Failed to post mood';
+      toast.error(errorMessage);
     } finally {
       setIsCreating(false);
     }
@@ -158,36 +130,18 @@ const Moods = () => {
 
   const handleLike = async (moodId: string) => {
     try {
-      const token = localStorage.getItem('socialee_token');
-      if (!token) {
-        toast.error('Please log in to like moods');
-        return;
-      }
-
-      const response = await fetch(`http://localhost:5000/api/moods/${moodId}/like`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        setUserMoods(prevMoods => 
-          prevMoods.map(mood => 
-            mood._id === moodId 
-              ? { 
-                  ...mood, 
-                  likes: Array.isArray(result.mood.likes) ? result.mood.likes : [],
-                  likesCount: result.likes || 0
-                }
-              : mood
-          )
-        );
-      } else {
-        toast.error('Failed to like mood');
-      }
+      const result = await moodsAPI.likeMood(moodId);
+      setUserMoods(prevMoods => 
+        prevMoods.map(mood => 
+          mood._id === moodId 
+            ? { 
+                ...mood, 
+                likes: Array.isArray(result.mood.likes) ? result.mood.likes : [],
+                likesCount: result.likes || 0
+              }
+            : mood
+        )
+      );
     } catch (error) {
       console.error('Error liking mood:', error);
       toast.error('Failed to like mood');
@@ -200,76 +154,54 @@ const Moods = () => {
     setIsCommenting(prev => ({ ...prev, [moodId]: true }));
 
     try {
-      const token = localStorage.getItem('socialee_token');
-      if (!token) {
-        toast.error('Please log in to comment');
-        return;
-      }
+      const comment = await moodsAPI.addComment(moodId, newComments[moodId].trim());
+      console.log('Comment added:', comment);
+      
+      setUserMoods(prevMoods =>
+        prevMoods.map(mood =>
+          mood._id === moodId
+            ? { 
+                ...mood, 
+                comments: [...(Array.isArray(mood.comments) ? mood.comments : []), comment],
+                commentsCount: (mood.commentsCount || 0) + 1
+              }
+            : mood
+        )
+      );
 
-      const response = await fetch(`http://localhost:5000/api/moods/${moodId}/comments`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ text: newComments[moodId].trim() }),
-      });
-
-      if (response.ok) {
-        const comment = await response.json();
-        console.log('Comment added:', comment);
-        
-        setUserMoods(prevMoods =>
-          prevMoods.map(mood =>
-            mood._id === moodId
-              ? { 
-                  ...mood, 
-                  comments: [...(Array.isArray(mood.comments) ? mood.comments : []), comment],
-                  commentsCount: (mood.commentsCount || 0) + 1
-                }
-              : mood
-          )
-        );
-
-        setNewComments(prev => ({ ...prev, [moodId]: '' }));
-        toast.success('Comment added!');
-      } else {
-        const error = await response.json();
-        console.error('Comment error:', error);
-        toast.error(error.error || 'Failed to add comment');
-      }
-    } catch (error) {
+      setNewComments(prev => ({ ...prev, [moodId]: '' }));
+      toast.success('Comment added!');
+    } catch (error: any) {
       console.error('Error adding comment:', error);
-      toast.error('Failed to add comment');
+      const errorMessage = error.response?.data?.error || 'Failed to add comment';
+      toast.error(errorMessage);
     } finally {
       setIsCommenting(prev => ({ ...prev, [moodId]: false }));
     }
   };
 
   const handleDeleteMood = async (moodId: string) => {
-    if (!confirm('Are you sure you want to delete this mood?')) return;
+    setMoodToDelete(moodId);
+    setShowDeleteModal(true);
+  };
 
+  const confirmDeleteMood = async () => {
+    if (!moodToDelete) return;
+    
+    setIsDeleting(true);
+    
     try {
-      const token = localStorage.getItem('socialee_token');
-      if (!token) return;
-
-      const response = await fetch(`http://localhost:5000/api/moods/${moodId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        setUserMoods(prev => prev.filter(mood => mood._id !== moodId));
-        toast.success('Mood deleted successfully');
-      } else {
-        toast.error('Failed to delete mood');
-      }
-    } catch (error) {
+      await moodsAPI.deleteMood(moodToDelete);
+      setUserMoods(prev => prev.filter(mood => mood._id !== moodToDelete));
+      toast.success('Mood deleted successfully');
+    } catch (error: any) {
       console.error('Error deleting mood:', error);
-      toast.error('Failed to delete mood');
+      const errorMessage = error.response?.data?.error || 'Failed to delete mood';
+      toast.error(errorMessage);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+      setMoodToDelete(null);
     }
   };
 
@@ -485,6 +417,51 @@ const Moods = () => {
           ))}
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {showDeleteModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-background-card rounded-lg p-6 max-w-md w-full"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold">Delete Mood</h2>
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="text-text-secondary hover:text-text-primary"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <p className="text-text-secondary mb-6">
+                Are you sure you want to delete this mood? This action cannot be undone.
+              </p>
+
+              <div className="flex justify-end gap-4">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="btn-outline"
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDeleteMood}
+                  className="btn bg-error hover:bg-opacity-90 text-white"
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete Mood'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

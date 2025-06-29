@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Camera, X, Heart, Smile, Laugh, Frown, ThumbsUp, Eye, ChevronLeft, ChevronRight, User } from 'lucide-react';
+import { Plus, Camera, X, Heart, Smile, Laugh, Frown, ThumbsUp, Eye, ChevronLeft, ChevronRight, User, Trash2, MoreHorizontal } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { snapsAPI } from '../services/api';
@@ -51,6 +51,9 @@ const Snaps = () => {
   const [caption, setCaption] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [snapToDelete, setSnapToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { user } = useAuth();
 
   const reactionTypes = [
@@ -253,6 +256,46 @@ const Snaps = () => {
     setCaption('');
   };
 
+  const handleDeleteSnap = async (snapId: string) => {
+    setSnapToDelete(snapId);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteSnap = async () => {
+    if (!snapToDelete) return;
+    
+    setIsDeleting(true);
+    
+    try {
+      await snapsAPI.deleteSnap(snapToDelete);
+      
+      // Remove snap from userSnaps
+      setUserSnaps(prev => prev.filter(snap => snap._id !== snapToDelete));
+      
+      // Update grouped snaps
+      const updatedSnaps = userSnaps.filter(snap => snap._id !== snapToDelete);
+      const grouped = groupSnapsByAuthor(updatedSnaps);
+      setGroupedSnaps(grouped);
+      
+      // Close modal if we're viewing the deleted snap
+      const activeGroup = groupedSnaps[activeGroupIndex];
+      const activeSnap = activeGroup?.snaps[activeSnapIndex];
+      if (activeSnap?._id === snapToDelete) {
+        setShowSnapModal(false);
+      }
+      
+      toast.success('Snap deleted successfully!');
+    } catch (error: any) {
+      console.error('Error deleting snap:', error);
+      const errorMessage = error.response?.data?.error || 'Failed to delete snap';
+      toast.error(errorMessage);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+      setSnapToDelete(null);
+    }
+  };
+
   const handleReaction = async (reactionType: string) => {
     const activeGroup = groupedSnaps[activeGroupIndex];
     const activeSnap = activeGroup.snaps[activeSnapIndex];
@@ -347,7 +390,7 @@ const Snaps = () => {
           groupedSnaps.map((group, groupIndex) => (
             <motion.div
               key={group.author._id}
-              className="aspect-square rounded-lg overflow-hidden cursor-pointer relative"
+              className="aspect-square rounded-lg overflow-hidden cursor-pointer relative group"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               initial={{ opacity: 0, scale: 0.9 }}
@@ -371,9 +414,24 @@ const Snaps = () => {
                   />
                 )}
                 
+                {/* Delete button for own snaps */}
+                {group.author._id === user?.id && (
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteSnap(group.snaps[0]._id);
+                      }}
+                      className="p-2 bg-black bg-opacity-50 rounded-full hover:bg-opacity-70 transition-colors"
+                    >
+                      <Trash2 size={16} className="text-white" />
+                    </button>
+                  </div>
+                )}
+                
                 {/* Snap count indicator */}
                 {group.snaps.length > 1 && (
-                  <div className="absolute top-2 right-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded-full">
+                  <div className="absolute top-2 left-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded-full">
                     {group.snaps.length}
                   </div>
                 )}
@@ -514,6 +572,51 @@ const Snaps = () => {
         )}
       </AnimatePresence>
 
+      {/* Delete Confirmation Modal - Higher z-index */}
+      <AnimatePresence>
+        {showDeleteModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-background-card rounded-lg p-6 max-w-md w-full"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold">Delete Snap</h2>
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="text-text-secondary hover:text-text-primary"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <p className="text-text-secondary mb-6">
+                Are you sure you want to delete this snap? This action cannot be undone.
+              </p>
+
+              <div className="flex justify-end gap-4">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="btn-outline"
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDeleteSnap}
+                  className="btn bg-error hover:bg-opacity-90 text-white"
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete Snap'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Snap Viewer Modal */}
       <AnimatePresence>
         {showSnapModal && activeSnap && activeGroup && (
@@ -602,7 +705,14 @@ const Snaps = () => {
                       <Eye size={16} className="text-white" />
                       <span className="text-sm text-white">{activeSnap.viewsCount}</span>
                     </div>
-                    {activeSnap.author._id !== user?.id && (
+                    {activeSnap.author._id === user?.id ? (
+                      <button
+                        onClick={() => handleDeleteSnap(activeSnap._id)}
+                        className="p-2 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-colors"
+                      >
+                        <Trash2 size={16} className="text-white" />
+                      </button>
+                    ) : (
                       <button
                         onClick={() => setShowReactions(!showReactions)}
                         className="p-2 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-colors"

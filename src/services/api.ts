@@ -78,6 +78,39 @@ export const authAPI = {
     }
   },
 
+  forgotPassword: async (username: string, email: string) => {
+    try {
+      const response = await api.post('/auth/forgot-password', { username, email });
+      console.log('✅ Forgot password request successful');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Forgot password request failed:', error);
+      throw error;
+    }
+  },
+
+  resetPassword: async (token: string, newPassword: string) => {
+    try {
+      const response = await api.post('/auth/reset-password', { token, newPassword });
+      console.log('✅ Password reset successful');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Password reset failed:', error);
+      throw error;
+    }
+  },
+
+  verifyResetToken: async (token: string) => {
+    try {
+      const response = await api.get(`/auth/verify-reset-token/${token}`);
+      console.log('✅ Token verification successful');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Token verification failed:', error);
+      throw error;
+    }
+  },
+
   changePassword: async (oldPassword: string, newPassword: string) => {
     try {
       const response = await api.put('/auth/change-password', { oldPassword, newPassword });
@@ -313,6 +346,17 @@ export const messagesAPI = {
     }
   },
 
+  deleteConversation: async (userId: string) => {
+    try {
+      const response = await api.delete(`/messages/conversation/${userId}`);
+      console.log('✅ Conversation deleted successfully');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Conversation deletion failed:', error);
+      throw error;
+    }
+  },
+
   getUnreadCount: async () => {
     try {
       const response = await api.get('/messages/unread-count');
@@ -512,6 +556,76 @@ export const snapsAPI = {
       return response.data;
     } catch (error) {
       console.error('❌ Snap deletion failed:', error);
+      throw error;
+    }
+  },
+};
+
+// Moods API calls
+export const moodsAPI = {
+  createMood: async (moodData: { text: string; mood: string; backgroundColor: string; textColor: string }) => {
+    try {
+      console.log('💭 Creating mood');
+      const response = await api.post('/moods', moodData);
+      console.log('✅ Mood created successfully');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Mood creation failed:', error);
+      throw error;
+    }
+  },
+
+  getFeedMoods: async () => {
+    try {
+      const response = await api.get('/moods/feed');
+      console.log(`✅ Loaded ${response.data.length} moods`);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Failed to load moods:', error);
+      throw error;
+    }
+  },
+
+  getUserMoods: async (userId: string) => {
+    try {
+      const response = await api.get(`/moods/user/${userId}`);
+      console.log(`✅ Loaded ${response.data.length} moods for user ${userId}`);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Failed to load user moods:', error);
+      throw error;
+    }
+  },
+
+  likeMood: async (moodId: string) => {
+    try {
+      const response = await api.post(`/moods/${moodId}/like`);
+      console.log('✅ Mood like/unlike successful');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Mood like/unlike failed:', error);
+      throw error;
+    }
+  },
+
+  addComment: async (moodId: string, text: string) => {
+    try {
+      const response = await api.post(`/moods/${moodId}/comments`, { text });
+      console.log('✅ Comment added to mood successfully');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Comment addition to mood failed:', error);
+      throw error;
+    }
+  },
+
+  deleteMood: async (moodId: string) => {
+    try {
+      const response = await api.delete(`/moods/${moodId}`);
+      console.log('✅ Mood deleted successfully');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Mood deletion failed:', error);
       throw error;
     }
   },

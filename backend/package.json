@@ -11,18 +11,24 @@
     "check-mongo": "node -e \"const mongoose = require('mongoose'); mongoose.connect('mongodb://localhost:27017/socialee').then(() => { console.log('MongoDB is running!'); process.exit(0); }).catch(err => { console.error('MongoDB is not running:', err.message); process.exit(1); });\""
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "mongoose": "^8.0.3",
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
-    "bcryptjs": "^2.4.3",
+    "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2",
-    "multer": "^1.4.5-lts.1"
+    "mongoose": "^8.0.3",
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.10.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
   },
-  "keywords": ["social media", "api", "express", "mongodb"],
+  "keywords": [
+    "social media",
+    "api",
+    "express",
+    "mongodb"
+  ],
   "author": "",
   "license": "ISC"
 }

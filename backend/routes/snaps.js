@@ -208,6 +208,8 @@ router.delete('/:snapId', auth, async (req, res) => {
     const { snapId } = req.params;
     const userId = req.userId;
 
+    console.log('🗑️ Deleting snap:', snapId, 'by user:', userId);
+
     const snap = await Snap.findById(snapId);
     if (!snap) {
       return res.status(404).json({ error: 'Snap not found' });

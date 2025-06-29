@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, Link, useLocation } from 'react-router-dom';
-import { ArrowLeft, Send, User } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Send, User, Trash2, MoreHorizontal, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { messagesAPI, usersAPI } from '../services/api';
 import { Message, User as UserType } from '../types';
@@ -15,9 +15,16 @@ const Conversation = () => {
   const [otherUser, setOtherUser] = useState<UserType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
+  const [showConversationDeleteModal, setShowConversationDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeletingConversation, setIsDeletingConversation] = useState(false);
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!userId) return;
@@ -35,6 +42,16 @@ const Conversation = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Close options menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setShowOptionsMenu(false);
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
 
   const loadConversation = async () => {
     if (!userId) return;
@@ -138,6 +155,57 @@ const Conversation = () => {
     }
   };
 
+  const handleDeleteMessage = async (messageId: string) => {
+    setMessageToDelete(messageId);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteMessage = async () => {
+    if (!messageToDelete) return;
+    
+    setIsDeleting(true);
+    
+    try {
+      await messagesAPI.deleteMessage(messageToDelete);
+      setMessages(prev => prev.filter(msg => msg.id !== messageToDelete));
+      toast.success('Message deleted successfully');
+    } catch (error: any) {
+      console.error('Error deleting message:', error);
+      const errorMessage = error.response?.data?.error || 'Failed to delete message';
+      toast.error(errorMessage);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+      setMessageToDelete(null);
+    }
+  };
+
+  const handleDeleteConversation = () => {
+    setShowConversationDeleteModal(true);
+    setShowOptionsMenu(false);
+  };
+
+  const confirmDeleteConversation = async () => {
+    if (!userId) return;
+    
+    setIsDeletingConversation(true);
+    
+    try {
+      await messagesAPI.deleteConversation(userId);
+      setMessages([]);
+      toast.success('Conversation deleted successfully');
+      // Navigate back to messages
+      navigate('/messages');
+    } catch (error: any) {
+      console.error('Error deleting conversation:', error);
+      const errorMessage = error.response?.data?.error || 'Failed to delete conversation';
+      toast.error(errorMessage);
+    } finally {
+      setIsDeletingConversation(false);
+      setShowConversationDeleteModal(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -185,6 +253,39 @@ const Conversation = () => {
             <p className="text-xs text-text-muted">@{otherUser.username}</p>
           </div>
         </Link>
+        
+        {/* Options menu */}
+        <div className="relative">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowOptionsMenu(!showOptionsMenu);
+            }}
+            className="p-2 rounded-full hover:bg-background-light transition-colors"
+          >
+            <MoreHorizontal size={20} />
+          </button>
+          
+          <AnimatePresence>
+            {showOptionsMenu && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                className="absolute right-0 top-full mt-1 bg-background-card border border-border rounded-lg shadow-lg z-10 min-w-[160px]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  onClick={handleDeleteConversation}
+                  className="w-full px-4 py-2 text-left text-error hover:bg-background-light transition-colors rounded-lg flex items-center gap-2"
+                >
+                  <Trash2 size={14} />
+                  <span>Delete Conversation</span>
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
       
       {/* Messages */}
@@ -217,7 +318,7 @@ const Conversation = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.2, delay: index * 0.05 }}
                 >
-                  <div className={`max-w-[70%] ${isCurrentUser ? 'order-2' : 'order-1'}`}>
+                  <div className={`max-w-[70%] ${isCurrentUser ? 'order-2' : 'order-1'} group`}>
                     {!isCurrentUser && (
                       <div className="h-8 w-8 rounded-full overflow-hidden bg-background-light flex items-center justify-center mb-1">
                         {message.sender.profilePic ? (
@@ -231,12 +332,20 @@ const Conversation = () => {
                         )}
                       </div>
                     )}
-                    <div className={`px-4 py-2 rounded-lg ${
+                    <div className={`relative px-4 py-2 rounded-lg ${
                       isCurrentUser 
                         ? 'bg-accent-pink text-white rounded-tr-none' 
                         : 'bg-background-light text-text-primary rounded-tl-none'
                     }`}>
                       <p>{message.text}</p>
+                      {isCurrentUser && (
+                        <button
+                          onClick={() => handleDeleteMessage(message.id)}
+                          className="absolute -right-8 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-background-light"
+                        >
+                          <Trash2 size={14} className="text-text-secondary hover:text-error" />
+                        </button>
+                      )}
                     </div>
                     <p className="text-xs text-text-muted mt-1">
                       {message.createdAt}
@@ -270,6 +379,97 @@ const Conversation = () => {
           </button>
         </form>
       </div>
+
+      {/* Delete Message Modal */}
+      <AnimatePresence>
+        {showDeleteModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-background-card rounded-lg p-6 max-w-md w-full"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold">Delete Message</h2>
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="text-text-secondary hover:text-text-primary"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <p className="text-text-secondary mb-6">
+                Are you sure you want to delete this message? This action cannot be undone.
+              </p>
+
+              <div className="flex justify-end gap-4">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="btn-outline"
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDeleteMessage}
+                  className="btn bg-error hover:bg-opacity-90 text-white"
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete Message'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Conversation Modal */}
+      <AnimatePresence>
+        {showConversationDeleteModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-background-card rounded-lg p-6 max-w-md w-full"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold">Delete Conversation</h2>
+                <button
+                  onClick={() => setShowConversationDeleteModal(false)}
+                  className="text-text-secondary hover:text-text-primary"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <p className="text-text-secondary mb-6">
+                Are you sure you want to delete this entire conversation with {otherUser.name}? 
+                All messages will be permanently deleted and this action cannot be undone.
+              </p>
+
+              <div className="flex justify-end gap-4">
+                <button
+                  onClick={() => setShowConversationDeleteModal(false)}
+                  className="btn-outline"
+                  disabled={isDeletingConversation}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDeleteConversation}
+                  className="btn bg-error hover:bg-opacity-90 text-white"
+                  disabled={isDeletingConversation}
+                >
+                  {isDeletingConversation ? 'Deleting...' : 'Delete Conversation'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -1,10 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
+const PasswordReset = require('../models/PasswordReset');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const mongoose = require('mongoose');
 const auth = require('../middleware/auth');
+const { sendPasswordResetEmail, testEmailService } = require('../utils/emailService');
 
 // Signup route
 router.post('/signup', async (req, res) => {
@@ -204,6 +207,228 @@ router.post('/login', async (req, res) => {
     }
     
     res.status(500).json({ error: 'Error logging in: ' + err.message });
+  }
+});
+
+// Forgot password route
+router.post('/forgot-password', async (req, res) => {
+  try {
+    console.log('🔑 Forgot password request:', { username: req.body.username, email: req.body.email });
+    
+    const { username, email } = req.body;
+
+    // Validate required fields
+    if (!username || !email) {
+      return res.status(400).json({ 
+        error: 'Username and email are required' 
+      });
+    }
+
+    // Find user by username
+    const user = await User.findOne({ 
+      username: username.toLowerCase() 
+    });
+
+    if (!user) {
+      console.log('❌ User not found:', username);
+      return res.status(404).json({ 
+        error: 'No account found with this username' 
+      });
+    }
+
+    // Check if the email matches the user's registered email
+    if (user.email.toLowerCase() !== email.toLowerCase()) {
+      console.log('❌ Email mismatch for user:', username);
+      return res.status(400).json({ 
+        error: 'The email address does not match the one associated with this username' 
+      });
+    }
+
+    // Check for existing unused password reset tokens
+    const existingReset = await PasswordReset.findOne({
+      userId: user._id,
+      used: false,
+      expiresAt: { $gt: new Date() }
+    });
+
+    if (existingReset) {
+      console.log('⚠️ Existing password reset token found for user:', username);
+      return res.status(429).json({ 
+        error: 'A password reset email has already been sent. Please check your email or wait 15 minutes before requesting another reset.' 
+      });
+    }
+
+    // Test email service first
+    console.log('🧪 Testing email service before sending...');
+    try {
+      const emailServiceWorking = await testEmailService();
+      if (!emailServiceWorking) {
+        console.error('❌ Email service test failed');
+        return res.status(500).json({ 
+          error: 'Email service is currently unavailable. Please try again later.' 
+        });
+      }
+      console.log('✅ Email service test passed');
+    } catch (testError) {
+      console.error('❌ Email service test error:', testError);
+      return res.status(500).json({ 
+        error: 'Email service is currently unavailable. Please try again later.',
+        details: process.env.NODE_ENV === 'development' ? testError.message : undefined
+      });
+    }
+
+    // Generate secure reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    
+    // Create password reset record
+    const passwordReset = new PasswordReset({
+      userId: user._id,
+      email: user.email,
+      token: resetToken,
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
+      used: false
+    });
+
+    await passwordReset.save();
+    console.log('✅ Password reset token created for user:', username);
+
+    // Send password reset email
+    try {
+      console.log('📧 Attempting to send password reset email...');
+      const emailResult = await sendPasswordResetEmail(user.email, resetToken, user.name);
+      console.log('✅ Password reset email sent successfully');
+      
+      res.json({
+        message: 'Password reset email sent successfully. Please check your email for instructions.',
+        emailSent: true,
+        // Include preview URL for development
+        ...(emailResult.previewUrl && { previewUrl: emailResult.previewUrl })
+      });
+    } catch (emailError) {
+      console.error('❌ Failed to send password reset email:', emailError);
+      
+      // Clean up the password reset token if email fails
+      await PasswordReset.findByIdAndDelete(passwordReset._id);
+      
+      return res.status(500).json({ 
+        error: 'Failed to send password reset email. Please try again later.',
+        details: process.env.NODE_ENV === 'development' ? emailError.message : undefined
+      });
+    }
+
+  } catch (err) {
+    console.error('❌ Forgot password error:', err);
+    res.status(500).json({ 
+      error: 'Error processing password reset request: ' + err.message 
+    });
+  }
+});
+
+// Reset password route
+router.post('/reset-password', async (req, res) => {
+  try {
+    console.log('🔄 Password reset attempt with token');
+    
+    const { token, newPassword } = req.body;
+
+    // Validate required fields
+    if (!token || !newPassword) {
+      return res.status(400).json({ 
+        error: 'Reset token and new password are required' 
+      });
+    }
+
+    // Validate password strength
+    if (newPassword.length < 6) {
+      return res.status(400).json({ 
+        error: 'Password must be at least 6 characters long' 
+      });
+    }
+
+    // Find valid password reset token
+    const passwordReset = await PasswordReset.findOne({
+      token: token,
+      used: false,
+      expiresAt: { $gt: new Date() }
+    }).populate('userId');
+
+    if (!passwordReset) {
+      console.log('❌ Invalid or expired password reset token');
+      return res.status(400).json({ 
+        error: 'Invalid or expired password reset token. Please request a new password reset.' 
+      });
+    }
+
+    const user = passwordReset.userId;
+    if (!user) {
+      console.log('❌ User not found for password reset token');
+      return res.status(404).json({ 
+        error: 'User account not found' 
+      });
+    }
+
+    // Hash new password
+    console.log('🔐 Hashing new password...');
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    // Update user password
+    await User.findByIdAndUpdate(user._id, { 
+      password: hashedPassword 
+    });
+
+    // Mark password reset token as used
+    await PasswordReset.findByIdAndUpdate(passwordReset._id, { 
+      used: true 
+    });
+
+    console.log('✅ Password reset successful for user:', user.username);
+
+    res.json({
+      message: 'Password reset successful. You can now log in with your new password.',
+      success: true
+    });
+
+  } catch (err) {
+    console.error('❌ Password reset error:', err);
+    res.status(500).json({ error: 'Error resetting password: ' + err.message });
+  }
+});
+
+// Verify reset token route
+router.get('/verify-reset-token/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    const passwordReset = await PasswordReset.findOne({
+      token: token,
+      used: false,
+      expiresAt: { $gt: new Date() }
+    }).populate('userId', 'name username email');
+
+    if (!passwordReset) {
+      return res.status(400).json({ 
+        valid: false,
+        error: 'Invalid or expired password reset token' 
+      });
+    }
+
+    res.json({
+      valid: true,
+      user: {
+        name: passwordReset.userId.name,
+        username: passwordReset.userId.username,
+        email: passwordReset.userId.email
+      },
+      expiresAt: passwordReset.expiresAt
+    });
+
+  } catch (err) {
+    console.error('❌ Token verification error:', err);
+    res.status(500).json({ 
+      valid: false,
+      error: 'Error verifying token' 
+    });
   }
 });
 

@@ -200,6 +200,8 @@ router.delete('/:messageId', auth, async (req, res) => {
     const { messageId } = req.params;
     const userId = req.userId;
 
+    console.log('🗑️ Deleting message:', messageId, 'by user:', userId);
+
     const message = await Message.findById(messageId);
     if (!message) {
       return res.status(404).json({ error: 'Message not found' });
@@ -217,6 +219,31 @@ router.delete('/:messageId', auth, async (req, res) => {
   } catch (err) {
     console.error('Delete message error:', err);
     res.status(500).json({ error: 'Error deleting message: ' + err.message });
+  }
+});
+
+// Delete entire conversation
+router.delete('/conversation/:userId', auth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const currentUserId = req.userId;
+
+    console.log('🗑️ Deleting conversation between:', currentUserId, 'and', userId);
+
+    // Generate conversation ID
+    const conversationId = Message.generateConversationId(currentUserId, userId);
+
+    // Delete all messages in this conversation
+    const result = await Message.deleteMany({ conversationId });
+
+    console.log(`✅ Deleted ${result.deletedCount} messages from conversation`);
+    res.json({ 
+      message: 'Conversation deleted successfully',
+      deletedCount: result.deletedCount
+    });
+  } catch (err) {
+    console.error('Delete conversation error:', err);
+    res.status(500).json({ error: 'Error deleting conversation: ' + err.message });
   }
 });
 
