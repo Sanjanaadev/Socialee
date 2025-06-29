@@ -210,7 +210,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Forgot password route - GUARANTEED TO WORK
+// Forgot password route - Enhanced with better token management
 router.post('/forgot-password', async (req, res) => {
   try {
     console.log('🔑 Password reset request for:', req.body.username);
@@ -244,19 +244,11 @@ router.post('/forgot-password', async (req, res) => {
       });
     }
 
-    // Check for existing unused password reset tokens
-    const existingReset = await PasswordReset.findOne({
-      userId: user._id,
-      used: false,
-      expiresAt: { $gt: new Date() }
+    // Clear any existing password reset tokens for this user
+    await PasswordReset.deleteMany({
+      userId: user._id
     });
-
-    if (existingReset) {
-      console.log('⚠️ Existing password reset token found for user:', username);
-      return res.status(429).json({ 
-        error: 'A password reset email has already been sent. Please check your email or wait 15 minutes before requesting another reset.' 
-      });
-    }
+    console.log('🧹 Cleared existing password reset tokens for user');
 
     // Generate secure reset token
     const resetToken = crypto.randomBytes(32).toString('hex');
@@ -273,24 +265,25 @@ router.post('/forgot-password', async (req, res) => {
     await passwordReset.save();
     console.log('✅ Password reset token created for user:', username);
 
-    // Send password reset email - this ALWAYS works now
-    console.log('📧 Processing password reset email...');
+    // Send password reset email
+    console.log('📧 Sending password reset email...');
     
     try {
       const emailResult = await sendPasswordResetEmail(user.email, resetToken, user.name);
-      console.log('✅ Password reset process completed successfully');
+      console.log('✅ Password reset email process completed');
       
       const response = {
-        message: 'Password reset processed successfully!',
+        message: 'Password reset email sent successfully!',
         emailSent: true,
         emailType: emailResult.emailType,
+        service: emailResult.service,
         success: true
       };
 
       // Add preview URL for test emails
       if (emailResult.previewUrl) {
         response.previewUrl = emailResult.previewUrl;
-        response.message = 'Password reset email sent! Use the preview link to view the email.';
+        response.message = 'Password reset email sent! Check the preview link to view the email.';
       }
 
       // Add direct reset URL for fallback
@@ -303,10 +296,14 @@ router.post('/forgot-password', async (req, res) => {
         response.note = emailResult.note;
       }
 
+      if (emailResult.error) {
+        response.warning = `Email service issue: ${emailResult.error}`;
+      }
+
       res.json(response);
       
     } catch (emailError) {
-      console.error('⚠️ Email process had issues, but providing working solution:', emailError);
+      console.error('⚠️ Email sending failed, providing working fallback:', emailError);
       
       // ALWAYS provide a working solution
       const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${resetToken}`;
@@ -315,9 +312,11 @@ router.post('/forgot-password', async (req, res) => {
         message: 'Password reset link created successfully!',
         emailSent: false,
         resetUrl: resetUrl,
-        note: 'Direct reset link provided - works perfectly!',
+        note: 'Email service unavailable, but your reset link works perfectly!',
         emailType: 'direct',
-        success: true
+        service: 'Direct Link',
+        success: true,
+        warning: emailError.message
       });
     }
 
